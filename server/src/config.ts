@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Walks up from this file until it finds the workspace root package.json, so the
@@ -8,10 +8,12 @@ import path from 'node:path';
 export function projectRoot(): string {
   let dir = __dirname;
   for (let i = 0; i < 8; i++) {
-    const pkg = path.join(dir, 'package.json');
+    const pkg = path.join(dir, "package.json");
     if (fs.existsSync(pkg)) {
       try {
-        const json = JSON.parse(fs.readFileSync(pkg, 'utf8')) as { workspaces?: unknown };
+        const json = JSON.parse(fs.readFileSync(pkg, "utf8")) as {
+          workspaces?: unknown;
+        };
         if (Array.isArray(json.workspaces)) return dir;
       } catch {
         // unreadable package.json, keep walking
@@ -26,16 +28,19 @@ export function projectRoot(): string {
 
 /** Minimal .env reader: KEY=value lines, # comments, existing env wins. */
 function loadDotEnv(root: string): void {
-  const file = path.join(root, '.env');
+  const file = path.join(root, ".env");
   if (!fs.existsSync(file)) return;
-  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     if (!(key in process.env)) process.env[key] = value;
@@ -48,9 +53,11 @@ export interface TwilioConfig {
   from: string;
 }
 
-export interface WhatsappConfig {
-  token: string;
-  phoneNumberId: string;
+export interface TwilioWhatsappConfig {
+  accountSid: string;
+  authToken: string;
+  from: string;
+  template?: string;
 }
 
 export interface AppConfig {
@@ -62,32 +69,44 @@ export interface AppConfig {
   /** how long a live-mode outreach waits for a reply before it is marked no_response */
   replyTimeoutMs: number;
   twilio: TwilioConfig | null;
-  whatsapp: WhatsappConfig | null;
+  twilioWhatsapp: TwilioWhatsappConfig | null;
 }
 
 function env(name: string): string | undefined {
   const value = process.env[name];
-  return value === undefined || value === '' ? undefined : value;
+  return value === undefined || value === "" ? undefined : value;
 }
 
 export function loadConfig(): AppConfig {
   const root = projectRoot();
   loadDotEnv(root);
 
-  const twilioSid = env('TWILIO_ACCOUNT_SID');
-  const twilioToken = env('TWILIO_AUTH_TOKEN');
-  const twilioFrom = env('TWILIO_FROM');
-  const waToken = env('WHATSAPP_TOKEN');
-  const waPhoneId = env('WHATSAPP_PHONE_NUMBER_ID');
+  const twilioSid = env("TWILIO_ACCOUNT_SID");
+  const twilioToken = env("TWILIO_AUTH_TOKEN");
+  const twilioFrom = env("TWILIO_FROM");
+  const waTemplate = env("WHATSAPP_TEMPLATE");
+  const twilioWhatsappFrom = env("TWILIO_WHATSAPP_FROM");
 
   return {
-    port: Number(env('PORT') ?? 4000) || 4000,
-    dbPath: env('DB_PATH') ?? path.join(root, 'data', 'freightdesk.db'),
-    sessionTtlDays: Number(env('SESSION_TTL_DAYS') ?? 7) || 7,
-    webhookToken: env('WEBHOOK_TOKEN') ?? 'freightdesk-dev-token',
-    replyTimeoutMs: Number(env('REPLY_TIMEOUT_MS') ?? 15 * 60_000) || 15 * 60_000,
-    twilio: twilioSid && twilioToken && twilioFrom ? { accountSid: twilioSid, authToken: twilioToken, from: twilioFrom } : null,
-    whatsapp: waToken && waPhoneId ? { token: waToken, phoneNumberId: waPhoneId } : null,
+    port: Number(env("PORT") ?? 4000) || 4000,
+    dbPath: env("DB_PATH") ?? path.join(root, "data", "freightdesk.db"),
+    sessionTtlDays: Number(env("SESSION_TTL_DAYS") ?? 7) || 7,
+    webhookToken: env("WEBHOOK_TOKEN") ?? "freightdesk-dev-token",
+    replyTimeoutMs:
+      Number(env("REPLY_TIMEOUT_MS") ?? 15 * 60_000) || 15 * 60_000,
+    twilio:
+      twilioSid && twilioToken && twilioFrom
+        ? { accountSid: twilioSid, authToken: twilioToken, from: twilioFrom }
+        : null,
+    twilioWhatsapp:
+      twilioSid && twilioToken && twilioWhatsappFrom
+        ? {
+            accountSid: twilioSid,
+            authToken: twilioToken,
+            from: twilioWhatsappFrom,
+            ...(waTemplate ? { template: waTemplate } : {}),
+          }
+        : null,
   };
 }
 

@@ -1,10 +1,26 @@
-import type { Channel, LockInAttempt, Order, Quote, Requirement, Trip, Vendor } from '../../shared/types';
-import { VEHICLE_TYPE_LABEL } from '../../shared/types';
-import { type InboundMessage, modeFor, phoneKey, placeVoiceCall, sendWhatsApp, type SendResult } from './channels';
-import { config } from './config';
-import { withNormalisation } from './domain/aggregation';
-import { flagReason, parseQuoteReply } from './domain/parsing';
-import { attemptsFor, getRequirement, type Store } from './store';
+import type {
+  Channel,
+  LockInAttempt,
+  Order,
+  Quote,
+  Requirement,
+  Trip,
+  Vendor,
+} from "../../shared/types";
+import { VEHICLE_TYPE_LABEL } from "../../shared/types";
+import {
+  modeFor,
+  phoneKey,
+  placeVoiceCall,
+  sendWhatsApp,
+  whatsappMessage,
+  type InboundMessage,
+  type SendResult,
+} from "./channels";
+import { config } from "./config";
+import { withNormalisation } from "./domain/aggregation";
+import { flagReason, parseQuoteReply } from "./domain/parsing";
+import { attemptsFor, getRequirement, type Store } from "./store";
 
 /**
  * Outreach and vendor lock-in are simulated in process: telephony and WhatsApp
@@ -66,20 +82,12 @@ function notify(): void {
   try {
     mutationListener?.();
   } catch (err) {
-    console.error('persist after timer failed:', err);
+    console.error("persist after timer failed:", err);
   }
 }
 
 function round100(n: number): number {
   return Math.round(n / 100) * 100;
-}
-
-function whatsappBody(req: Requirement, vendorName: string): string {
-  return (
-    `Hello ${vendorName}, we need a ${VEHICLE_TYPE_LABEL[req.vehicleType]} (${req.bodySizeFt} ft, ${req.axle} axle) ` +
-    `for ${req.weightT} tonnes from ${req.origin} to ${req.destination}. Loading: ${req.loadingDate} ${req.loadingTime}. ` +
-    `Please reply with your best rate in rupees for this trip.`
-  );
 }
 
 function voiceScript(req: Requirement): string {
@@ -91,24 +99,24 @@ function voiceScript(req: Requirement): string {
 }
 
 const VOICE_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-  `${rate} podhum sir, ${tollExtra ? 'toll extra' : 'toll included'}`,
+  `${rate} podhum sir, ${tollExtra ? "toll extra" : "toll included"}`,
   `Vanakkam sir, ${rate} rupees for this trip, vehicle ready`,
-  `${rate} sir, ${tollExtra ? 'toll extra' : 'all inclusive'}, loading fine`,
+  `${rate} sir, ${tollExtra ? "toll extra" : "all inclusive"}, loading fine`,
   `Rate ${rate} rupees, detention charges extra`,
 ];
 
 const WHATSAPP_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-  `Rs. ${rate.toLocaleString('en-IN')}, ${tollExtra ? 'toll extra' : 'all inclusive'}. Vehicle ready.`,
-  `${rate} ${tollExtra ? 'toll extra' : 'podhum, toll included'}`,
+  `Rs. ${rate.toLocaleString("en-IN")}, ${tollExtra ? "toll extra" : "all inclusive"}. Vehicle ready.`,
+  `${rate} ${tollExtra ? "toll extra" : "podhum, toll included"}`,
   `Best rate ${rate} rupees, loading ok`,
-  `ithu ${rate}, ${tollExtra ? 'toll extra' : 'toll included'}, vehicle ready`,
+  `ithu ${rate}, ${tollExtra ? "toll extra" : "toll included"}, vehicle ready`,
   `இந்த ட்ரிப்புக்கு ${rate} ரூபாய், வண்டி ரெடி`,
 ];
 
 const NO_RATE_REPLIES = [
-  'Call pannunga sir, rate solren',
-  'Vehicle ready, rate evening la solluren',
-  'நாளைக்கு பேசலாம், ரெடி இருக்கு',
+  "Call pannunga sir, rate solren",
+  "Vehicle ready, rate evening la solluren",
+  "நாளைக்கு பேசலாம், ரெடி இருக்கு",
 ];
 
 export interface OutreachOutcome {
@@ -122,11 +130,13 @@ export interface OutreachOutcome {
  */
 export function startOutreach(store: Store, reqId: string): OutreachOutcome {
   const req = getRequirement(store, reqId);
-  if (!req) throw new Error('Requirement not found');
-  if (attemptsFor(store, reqId).length > 0) throw new Error('Outreach has already started for this requirement');
+  if (!req) throw new Error("Requirement not found");
+  if (attemptsFor(store, reqId).length > 0)
+    throw new Error("Outreach has already started for this requirement");
 
   const match = store.matches[reqId];
-  if (!match || match.matched.length === 0) throw new Error('No shortlisted vendors. Run matching first.');
+  if (!match || match.matched.length === 0)
+    throw new Error("No shortlisted vendors. Run matching first.");
 
   const rng = mulberry32(hash(reqId));
   const base = req.rateCardRate ?? 34000;
@@ -134,9 +144,22 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
 
   shortlist.forEach((m, index) => {
     const vendor = m.vendor;
-    const preferred: Channel = vendor.preferredChannel === 'both' ? (rng() < 0.5 ? 'voice' : 'whatsapp') : vendor.preferredChannel;
-    const channel: Channel = index % 3 === 2 ? (preferred === 'whatsapp' ? 'voice' : 'whatsapp') : preferred;
-    const outbound = channel === 'whatsapp' ? whatsappBody(req, vendor.name) : voiceScript(req);
+    const preferred: Channel =
+      vendor.preferredChannel === "both"
+        ? rng() < 0.5
+          ? "voice"
+          : "whatsapp"
+        : vendor.preferredChannel;
+    const channel: Channel =
+      index % 3 === 2
+        ? preferred === "whatsapp"
+          ? "voice"
+          : "whatsapp"
+        : preferred;
+    const outbound =
+      channel === "whatsapp"
+        ? whatsappMessage(req, vendor.name, config.twilioWhatsapp?.template)
+        : voiceScript(req);
 
     const attemptId = `OA-S${store.counters.attempt + 1}`;
     store.counters.attempt += 1;
@@ -146,7 +169,7 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
       vendorId: vendor.id,
       vendorName: vendor.name,
       channel,
-      status: 'queued',
+      status: "queued",
       outbound,
       reply: null,
       startedAt: null,
@@ -156,20 +179,23 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
     const dialAt = 300 + index * 300;
     schedule(reqId, dialAt, () => {
       const attempt = store.attempts.find((a) => a.id === attemptId);
-      if (!attempt || attempt.status !== 'queued') return;
-      attempt.status = 'in_progress';
+      if (!attempt || attempt.status !== "queued") return;
+      attempt.status = "in_progress";
       attempt.startedAt = new Date().toISOString();
     });
 
     // Live mode sends real traffic; the reply then arrives on the webhook, or
     // the attempt times out to no_response after the configured reply window.
-    if (modeFor(channel) === 'live') {
+    if (modeFor(channel) === "live") {
       schedule(reqId, dialAt + config.replyTimeoutMs, () => {
         const attempt = store.attempts.find((a) => a.id === attemptId);
-        if (attempt && (attempt.status === 'queued' || attempt.status === 'in_progress')) {
-          attempt.status = 'no_response';
+        if (
+          attempt &&
+          (attempt.status === "queued" || attempt.status === "in_progress")
+        ) {
+          attempt.status = "no_response";
           attempt.repliedAt = new Date().toISOString();
-          attempt.reply = attempt.reply ?? 'No reply within the reply window.';
+          attempt.reply = attempt.reply ?? "No reply within the reply window.";
           settleIfComplete(store, reqId, attemptId);
         }
       });
@@ -183,28 +209,35 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
     const rate = round100(base * (1 + jitter));
     const noRate = responds && rng() < 0.12;
 
-    const settleAt = dialAt + (channel === 'voice' ? 2600 : 1700) + Math.floor(rng() * 900);
+    const settleAt =
+      dialAt + (channel === "voice" ? 2600 : 1700) + Math.floor(rng() * 900);
     schedule(reqId, settleAt, () => {
       const attempt = store.attempts.find((a) => a.id === attemptId);
       if (!attempt) return;
       // A webhook reply may have settled this attempt already; never overwrite it.
-      if (attempt.status === 'replied' || attempt.status === 'no_response') return;
+      if (attempt.status === "replied" || attempt.status === "no_response")
+        return;
       const now = new Date().toISOString();
 
       if (!responds) {
-        attempt.status = 'no_response';
+        attempt.status = "no_response";
         attempt.repliedAt = now;
         settleIfComplete(store, reqId, attemptId);
         return;
       }
 
       const raw = noRate
-        ? NO_RATE_REPLIES[Math.floor(rng() * NO_RATE_REPLIES.length)] ?? 'Rate will be sent shortly'
-        : channel === 'voice'
-          ? (VOICE_REPLIES(rate, tollExtra)[Math.floor(rng() * VOICE_REPLIES(rate, tollExtra).length)] ?? `${rate} sir`)
-          : (WHATSAPP_REPLIES(rate, tollExtra)[Math.floor(rng() * WHATSAPP_REPLIES(rate, tollExtra).length)] ?? `Rs. ${rate}`);
+        ? (NO_RATE_REPLIES[Math.floor(rng() * NO_RATE_REPLIES.length)] ??
+          "Rate will be sent shortly")
+        : channel === "voice"
+          ? (VOICE_REPLIES(rate, tollExtra)[
+              Math.floor(rng() * VOICE_REPLIES(rate, tollExtra).length)
+            ] ?? `${rate} sir`)
+          : (WHATSAPP_REPLIES(rate, tollExtra)[
+              Math.floor(rng() * WHATSAPP_REPLIES(rate, tollExtra).length)
+            ] ?? `Rs. ${rate}`);
 
-      attempt.status = 'replied';
+      attempt.status = "replied";
       attempt.reply = raw;
       attempt.repliedAt = now;
 
@@ -228,18 +261,22 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
         normalisedRate: 0,
       });
       store.counters.quote += 1;
-      quote.flagReason = flagReason(quote.rate, quote.confidence, req.rateCardRate);
+      quote.flagReason = flagReason(
+        quote.rate,
+        quote.confidence,
+        req.rateCardRate,
+      );
       store.quotes.push(quote);
       settleIfComplete(store, reqId, attemptId);
     });
   });
 
-  req.status = 'outreach';
+  req.status = "outreach";
 
   const totalMs = 300 + shortlist.length * 300 + 3500 + 1000;
   schedule(reqId, totalMs, () => {
     const current = getRequirement(store, reqId);
-    if (current && current.status === 'outreach') current.status = 'quoted';
+    if (current && current.status === "outreach") current.status = "quoted";
   });
 
   return { attemptCount: shortlist.length };
@@ -250,13 +287,19 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
  * screen never sits on "AI outreach running" with quotes already on it. The
  * timer above stays as a safety net for any attempt left behind.
  */
-function settleIfComplete(store: Store, reqId: string, _attemptId: string): void {
+function settleIfComplete(
+  store: Store,
+  reqId: string,
+  _attemptId: string,
+): void {
   const current = getRequirement(store, reqId);
-  if (!current || current.status !== 'outreach') return;
+  if (!current || current.status !== "outreach") return;
   const attempts = attemptsFor(store, reqId);
   if (attempts.length === 0) return;
-  const allResolved = attempts.every((a) => a.status === 'replied' || a.status === 'no_response');
-  if (allResolved) current.status = 'quoted';
+  const allResolved = attempts.every(
+    (a) => a.status === "replied" || a.status === "no_response",
+  );
+  if (allResolved) current.status = "quoted";
 }
 
 /** Sends the outbound message through the real provider when one is configured. */
@@ -269,12 +312,16 @@ async function deliverLive(
   outbound: string,
 ): Promise<void> {
   const result: SendResult =
-    channel === 'whatsapp'
+    channel === "whatsapp"
       ? await sendWhatsApp(vendor.whatsapp, outbound)
       : await placeVoiceCall(vendor.phone, outbound);
   const attempt = store.attempts.find((a) => a.id === attemptId);
-  if (attempt && !result.ok && (attempt.status === 'queued' || attempt.status === 'in_progress')) {
-    attempt.status = 'no_response';
+  if (
+    attempt &&
+    !result.ok &&
+    (attempt.status === "queued" || attempt.status === "in_progress")
+  ) {
+    attempt.status = "no_response";
     attempt.repliedAt = new Date().toISOString();
     attempt.reply = `Not delivered: ${result.detail}`;
     settleIfComplete(store, reqId, attemptId);
@@ -294,21 +341,31 @@ export interface InboundOutcome {
  * outreach attempt for that vendor number, parses it with the same quote parser
  * the simulator uses, and settles the requirement when every attempt is done.
  */
-export function applyInboundReply(store: Store, message: InboundMessage): InboundOutcome {
+export function applyInboundReply(
+  store: Store,
+  message: InboundMessage,
+): InboundOutcome {
   const key = phoneKey(message.phone);
-  if (!key) return { ok: false, detail: 'No usable phone number in the payload' };
+  if (!key)
+    return { ok: false, detail: "No usable phone number in the payload" };
 
-  const open = store.attempts.filter((a) => a.status === 'queued' || a.status === 'in_progress');
+  const open = store.attempts.filter(
+    (a) => a.status === "queued" || a.status === "in_progress",
+  );
   const attempt = open.find((a) => {
     const vendor = store.vendors.find((v) => v.id === a.vendorId);
     if (!vendor) return false;
     return phoneKey(vendor.phone) === key || phoneKey(vendor.whatsapp) === key;
   });
-  if (!attempt) return { ok: false, detail: `No open outreach attempt for ${message.phone}` };
+  if (!attempt)
+    return {
+      ok: false,
+      detail: `No open outreach attempt for ${message.phone}`,
+    };
 
   const req = getRequirement(store, attempt.requirementId);
   const now = new Date().toISOString();
-  attempt.status = 'replied';
+  attempt.status = "replied";
   attempt.reply = message.text;
   attempt.repliedAt = now;
 
@@ -334,7 +391,11 @@ export function applyInboundReply(store: Store, message: InboundMessage): Inboun
       normalisedRate: 0,
     });
     store.counters.quote += 1;
-    quote.flagReason = flagReason(quote.rate, quote.confidence, req.rateCardRate);
+    quote.flagReason = flagReason(
+      quote.rate,
+      quote.confidence,
+      req.rateCardRate,
+    );
     store.quotes.push(quote);
     quoteId = quote.id;
   }
@@ -343,13 +404,23 @@ export function applyInboundReply(store: Store, message: InboundMessage): Inboun
   notify();
   return {
     ok: true,
-    detail: quoteId ? `parsed ${quoteId} from ${attempt.vendorName}` : `reply recorded from ${attempt.vendorName}`,
+    detail: quoteId
+      ? `parsed ${quoteId} from ${attempt.vendorName}`
+      : `reply recorded from ${attempt.vendorName}`,
     requirementId: attempt.requirementId,
     quoteId,
   };
 }
 
-const DRIVERS = ['M. Kumar', 'S. Rajesh', 'P. Selvam', 'A. Dinesh', 'K. Anand', 'R. Vignesh', 'T. Murugan'];
+const DRIVERS = [
+  "M. Kumar",
+  "S. Rajesh",
+  "P. Selvam",
+  "A. Dinesh",
+  "K. Anand",
+  "R. Vignesh",
+  "T. Murugan",
+];
 
 /**
  * Vendor lock-in: the top shortlisted vendors are offered the final L1 price.
@@ -357,27 +428,28 @@ const DRIVERS = ['M. Kumar', 'S. Rajesh', 'P. Selvam', 'A. Dinesh', 'K. Anand', 
  */
 export function startLockIn(store: Store, orderId: string): Order {
   const order = store.orders.find((o) => o.id === orderId);
-  if (!order) throw new Error('Order not found');
+  if (!order) throw new Error("Order not found");
   const req = getRequirement(store, order.requirementId);
-  if (!req) throw new Error('Requirement not found');
+  if (!req) throw new Error("Requirement not found");
   const match = store.matches[req.id];
   const shortlist = match?.matched.slice(0, 3) ?? [];
 
-  if (shortlist.length === 0) throw new Error('No shortlisted vendors to lock in');
+  if (shortlist.length === 0)
+    throw new Error("No shortlisted vendors to lock in");
 
-  order.status = 'locking';
+  order.status = "locking";
   order.attempts = shortlist.map((m, index): LockInAttempt => {
-    const channel: Channel = index === 1 ? 'whatsapp' : 'voice';
+    const channel: Channel = index === 1 ? "whatsapp" : "voice";
     return {
       vendorId: m.vendor.id,
       vendorName: m.vendor.name,
       channel,
-      status: 'offered',
+      status: "offered",
       vehicleNo: null,
       driverName: null,
       driverPhone: null,
       at: null,
-      message: `The job is confirmed at Rs. ${order.l1Price.toLocaleString('en-IN')}. Can you take it? Please share vehicle number and driver details.`,
+      message: `The job is confirmed at Rs. ${order.l1Price.toLocaleString("en-IN")}. Can you take it? Please share vehicle number and driver details.`,
     };
   });
 
@@ -387,21 +459,21 @@ export function startLockIn(store: Store, orderId: string): Order {
     a.at = offerAt;
   });
 
-  const plateSuffix = String(hash(reqId) % 9000 + 1000);
-  const vehicleNo = `TN ${10 + (hash(reqId) % 80)} ${String.fromCharCode(65 + (hash(reqId) % 26))}${String.fromCharCode(65 + (hash(reqId + 'b') % 26))} ${plateSuffix}`;
-  const driver = DRIVERS[hash(reqId) % DRIVERS.length] ?? 'M. Kumar';
-  const driverPhone = `+91 9${String(hash(reqId + 'p') % 10)}${String(hash(reqId + 'q') % 100000000).padStart(8, '0')}`;
+  const plateSuffix = String((hash(reqId) % 9000) + 1000);
+  const vehicleNo = `TN ${10 + (hash(reqId) % 80)} ${String.fromCharCode(65 + (hash(reqId) % 26))}${String.fromCharCode(65 + (hash(reqId + "b") % 26))} ${plateSuffix}`;
+  const driver = DRIVERS[hash(reqId) % DRIVERS.length] ?? "M. Kumar";
+  const driverPhone = `+91 9${String(hash(reqId + "p") % 10)}${String(hash(reqId + "q") % 100000000).padStart(8, "0")}`;
 
   schedule(reqId, 3500, () => {
     const winner = order.attempts[0];
-    if (!winner || order.status !== 'locking') return;
-    winner.status = 'accepted';
+    if (!winner || order.status !== "locking") return;
+    winner.status = "accepted";
     winner.vehicleNo = vehicleNo;
     winner.driverName = driver;
     winner.driverPhone = driverPhone;
     winner.at = new Date().toISOString();
-    winner.message = `Accepted at Rs. ${order.l1Price.toLocaleString('en-IN')}. Vehicle ${vehicleNo}, driver ${driver}.`;
-    order.status = 'confirmed';
+    winner.message = `Accepted at Rs. ${order.l1Price.toLocaleString("en-IN")}. Vehicle ${vehicleNo}, driver ${driver}.`;
+    order.status = "confirmed";
     order.vendorId = winner.vendorId;
     order.vendorName = winner.vendorName;
 
@@ -415,30 +487,40 @@ export function startLockIn(store: Store, orderId: string): Order {
       vehicleNo,
       driver,
       driverPhone,
-      status: 'vendor_confirmed',
+      status: "vendor_confirmed",
       podFile: null,
-      events: [{ status: 'vendor_confirmed', at: new Date().toISOString(), note: 'Vendor accepted the job at the locked price.' }],
+      events: [
+        {
+          status: "vendor_confirmed",
+          at: new Date().toISOString(),
+          note: "Vendor accepted the job at the locked price.",
+        },
+      ],
     };
     store.trips.push(trip);
-    req.status = 'confirmed';
+    req.status = "confirmed";
   });
 
   order.attempts.slice(1).forEach((attempt, index) => {
     schedule(reqId, 5500 + index * 1500, () => {
-      if (attempt.status !== 'offered') return;
-      attempt.status = 'job_filled';
+      if (attempt.status !== "offered") return;
+      attempt.status = "job_filled";
       attempt.at = new Date().toISOString();
-      attempt.message = 'Job already filled with another vendor, thank you.';
+      attempt.message = "Job already filled with another vendor, thank you.";
     });
   });
 
   schedule(reqId, 20000, () => {
-    if (order.status === 'locking') order.status = 'stalled';
+    if (order.status === "locking") order.status = "stalled";
   });
 
   return order;
 }
 
-export function vendorByMatch(store: Store, reqId: string, index: number): Vendor | undefined {
+export function vendorByMatch(
+  store: Store,
+  reqId: string,
+  index: number,
+): Vendor | undefined {
   return store.matches[reqId]?.matched[index]?.vendor;
 }
