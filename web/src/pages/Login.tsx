@@ -9,6 +9,7 @@ export default function Login() {
   const location = useLocation();
   const [email, setEmail] = useState('admin@freightdesk.local');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +22,7 @@ export default function Login() {
     setBusy(true);
     setError('');
     try {
-      const signedIn = await signIn(email, password);
+      const signedIn = await signIn(email.trim(), password.trim());
       void signedIn;
       navigate(from, { replace: true });
     } catch (err) {
@@ -29,6 +30,12 @@ export default function Login() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function fillAccount(accEmail: string, accPass: string) {
+    setEmail(accEmail);
+    setPassword(accPass);
+    setError('');
   }
 
   return (
@@ -65,10 +72,26 @@ export default function Login() {
             />
           </div>
           <div className="field">
-            <label htmlFor="password">Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label htmlFor="password" style={{ marginBottom: 0 }}>Password</label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--brand-primary, #2563eb)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  padding: 0,
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
             <input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -81,27 +104,43 @@ export default function Login() {
         </form>
 
         <div className="auth-hint">
-          <div className="label">Demo accounts</div>
+          <div className="label">Demo accounts (click to fill):</div>
           <table>
             <tbody>
-              <tr>
+              <tr
+                onClick={() => fillAccount('admin@freightdesk.local', 'admin123')}
+                style={{ cursor: 'pointer' }}
+                title="Click to fill credentials"
+              >
                 <td>admin@freightdesk.local</td>
-                <td>admin123</td>
+                <td><code>admin123</code></td>
                 <td>{ROLE_LABEL.admin}</td>
               </tr>
-              <tr>
+              <tr
+                onClick={() => fillAccount('sales@freightdesk.local', 'sales123')}
+                style={{ cursor: 'pointer' }}
+                title="Click to fill credentials"
+              >
                 <td>sales@freightdesk.local</td>
-                <td>sales123</td>
+                <td><code>sales123</code></td>
                 <td>{ROLE_LABEL.sales}</td>
               </tr>
-              <tr>
+              <tr
+                onClick={() => fillAccount('ops@freightdesk.local', 'ops123')}
+                style={{ cursor: 'pointer' }}
+                title="Click to fill credentials"
+              >
                 <td>ops@freightdesk.local</td>
-                <td>ops123</td>
+                <td><code>ops123</code></td>
                 <td>{ROLE_LABEL.ops}</td>
               </tr>
-              <tr>
+              <tr
+                onClick={() => fillAccount('finance@freightdesk.local', 'finance123')}
+                style={{ cursor: 'pointer' }}
+                title="Click to fill credentials"
+              >
                 <td>finance@freightdesk.local</td>
-                <td>finance123</td>
+                <td><code>finance123</code></td>
                 <td>{ROLE_LABEL.finance}</td>
               </tr>
             </tbody>

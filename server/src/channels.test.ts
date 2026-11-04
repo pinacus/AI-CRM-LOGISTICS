@@ -22,11 +22,26 @@ function cfg(overrides: Partial<AppConfig> = {}): AppConfig {
     sessionTtlDays: 7,
     webhookToken: "tok",
     replyTimeoutMs: 1000,
-    twilio: { accountSid: "AC123", authToken: "secret", from: "+911100001111" },
+twilio: { accountSid: 'AC123', authToken: 'secret', from: '+911100001111' },
     twilioWhatsapp: {
-      accountSid: "AC123",
-      authToken: "secret",
-      from: "whatsapp:+14155238886",
+      accountSid: 'AC123',
+      authToken: 'secret',
+      from: 'whatsapp:+14155238886',
+    },
+    sarvam: {
+      apiKey: 'sarvam-key',
+      voiceApiKey: 'sarvam-voice-key',
+      modelBaseUrl: 'https://api.sarvam.ai',
+      model: 'sarvam-105b',
+      orgId: 'org',
+      workspaceId: 'ws',
+      appId: 'app',
+      appVersion: 1,
+      connectionId: 'conn',
+      agentPhoneNumber: '+918000000000',
+      webhookUrl: null,
+      vendorName: 'David Transportation',
+      vendorPhone: '6385106931',
     },
     ...overrides,
   };
@@ -181,10 +196,10 @@ test("placeVoiceCall posts to Twilio and surfaces errors", async () => {
 
 test("parseInbound handles Twilio form, WhatsApp JSON and plain JSON", () => {
   assert.deepEqual(
-    parseInbound({ From: "+919840011223", Body: "38500 podhum" }),
+    parseInbound({ From: "+919840011223", Body: "38500 rupees, toll extra" }),
     {
       phone: "+919840011223",
-      text: "38500 podhum",
+      text: "38500 rupees, toll extra",
     },
   );
   assert.deepEqual(parseInbound({ from: "+919840011223", text: "41000" }), {

@@ -53,7 +53,7 @@ export default function Privacy() {
 
         <h2>Voice calls and messages</h2>
         <p>
-          By default the AI voice agent and the Tamil WhatsApp messages are simulated inside the API process: no
+          By default the AI voice agent and the WhatsApp messages are simulated inside the API process: no
           call is placed and no message is delivered until provider credentials are configured. Simulated message
           bodies and reply texts are generated locally and no transcript leaves the machine. With credentials
           configured, outbound messages go to the provider and replies come back through the webhook endpoint.

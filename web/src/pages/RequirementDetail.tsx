@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+=======
 import { useCallback, useEffect, useMemo, useState } from "react";
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
 import { Link, useParams } from "react-router-dom";
 import {
   api,
@@ -91,10 +95,21 @@ export default function RequirementDetail() {
   // Poll while a simulation is in flight so attempt states update on screen.
   // The status covers the gap where attempts have settled but the requirement
   // has not moved to quoted yet.
+  const pendingCall = Boolean(
+    detail?.sarvamCalls.some(
+      (c) =>
+        c.status === "queued" &&
+        Date.now() - new Date(c.createdAt).getTime() < 15 * 60 * 1000,
+    ),
+  );
   const shouldPoll = Boolean(
     detail &&
     (detail.outreachRunning ||
       detail.lockInProgress ||
+<<<<<<< HEAD
+      pendingCall ||
+=======
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
       detail.requirement.status === "outreach" ||
       detail.requirement.status === "locking"),
   );
@@ -104,6 +119,29 @@ export default function RequirementDetail() {
     return () => window.clearInterval(handle);
   }, [shouldPoll, load]);
 
+<<<<<<< HEAD
+  // A placed call keeps its "queued" status until the Sarvam result is pulled,
+  // because the agent cannot reach this app over a public webhook. Pull it here
+  // so the transcript and the resulting quote show up without a manual step.
+  const lastSyncAt = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!detail) return;
+    const now = Date.now();
+    const due = detail.sarvamCalls.find((c) => {
+      if (c.status !== "queued") return false;
+      if (now - new Date(c.createdAt).getTime() < 15000) return false;
+      return now - (lastSyncAt.current.get(c.id) ?? 0) > 8000;
+    });
+    if (!due) return;
+    lastSyncAt.current.set(due.id, now);
+    api
+      .post(`/api/sarvam-calls/${due.id}/sync`)
+      .then(() => load())
+      .catch(() => undefined);
+  }, [detail, load]);
+
+=======
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
   async function action(
     name: string,
     run: () => Promise<unknown>,
@@ -148,7 +186,7 @@ export default function RequirementDetail() {
     );
   }
 
-  const { match, attempts, quotes, order, trip, invoice } = detail;
+  const { match, attempts, quotes, order, trip, invoice, sarvamCalls } = detail;
 
   return (
     <>
@@ -455,17 +493,61 @@ export default function RequirementDetail() {
       <Panel
         title="Outreach monitor"
         hint={
+<<<<<<< HEAD
+          attempts.length > 0 || sarvamCalls.length > 0
+=======
           attempts.length > 0
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
             ? "Voice calls and WhatsApp messages sent by the AI agent, with raw replies as they arrive"
             : "No outreach started for this requirement"
         }
         tight
       >
-        {attempts.length === 0 ? (
+        {attempts.length === 0 && sarvamCalls.length === 0 ? (
           <EmptyState title="Nothing sent yet">
             Start AI outreach once the shortlist looks right.
           </EmptyState>
         ) : (
+<<<<<<< HEAD
+          <>
+            {sarvamCalls.map((c) => (
+              <div className="attempt" key={c.id}>
+                <div className="attempt-head">
+                  <span style={{ color: "var(--muted)" }}>
+                    <Icon name="phone" size={15} />
+                  </span>
+                  <span className="who">{c.vendorName}</span>
+                  <Badge tone="plain">Sarvam AI call</Badge>
+                  <Badge
+                    tone={
+                      c.status === "connected"
+                        ? "success"
+                        : c.status === "queued"
+                          ? "info"
+                          : c.status === "no_answer"
+                            ? "warning"
+                            : c.status === "busy"
+                              ? "warning"
+                              : "neutral"
+                    }
+                  >
+                    {c.status === "no_answer"
+                      ? "No answer"
+                      : c.status === "connected"
+                        ? "Connected"
+                        : c.status === "busy"
+                          ? "Busy"
+                          : c.status === "failed"
+                            ? "Failed"
+                            : "Calling"}
+                  </Badge>
+                  <span className="time">
+                    {c.phone}, placed {formatTime(c.createdAt)}
+                    {c.durationSec !== null
+                      ? `, ${Math.round(c.durationSec)}s`
+                      : ""}
+                    {c.quoteId ? `, quoted ${c.quoteId}` : ""}
+=======
           attempts.map((a) => {
             const deliveryFailed =
               a.reply?.startsWith("Not delivered:") ?? false;
@@ -508,11 +590,48 @@ export default function RequirementDetail() {
                   <span className="time">
                     {a.startedAt ? `started ${formatTime(a.startedAt)}` : ""}
                     {a.repliedAt ? `, resolved ${formatTime(a.repliedAt)}` : ""}
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
                   </span>
                 </div>
 
                 <div className="transcript">
                   <div className="bubble out">
+<<<<<<< HEAD
+                    <span className="who">Agent said</span>
+                    {c.script}
+                  </div>
+                  <div className="bubble">
+                    <span className="who">Call transcript</span>
+                    {c.transcript ? (
+                      c.transcript
+                        .split("\n")
+                        .map((line, i) => (
+                          <div key={`${c.id}-${i}`}>{line}</div>
+                        ))
+                    ) : (
+                      <span className="muted">
+                        {c.status === "queued"
+                          ? "Call placed. Waiting for Sarvam to return the recording and transcript."
+                          : (c.failureReason ??
+                            "No transcript captured for this call.")}
+                      </span>
+                    )}
+                  </div>
+                  {c.status === "queued" ? (
+                    <div className="btn-row">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          action("sarvam-sync", () =>
+                            api.post(`/api/sarvam-calls/${c.id}/sync`),
+                          )
+                        }
+                      >
+                        Fetch result now
+                      </button>
+=======
                     <span className="who">
                       {deliveryFailed
                         ? "Delivery attempted"
@@ -538,12 +657,80 @@ export default function RequirementDetail() {
                         No reply inside the timeout. One reminder is logged,
                         then the vendor is marked no response.
                       </span>
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
                     </div>
                   ) : null}
                 </div>
               </div>
+<<<<<<< HEAD
+            ))}
+            {attempts.map((a) => (
+              <div className="attempt" key={a.id}>
+                <div className="attempt-head">
+                  <span style={{ color: "var(--muted)" }}>
+                    <Icon
+                      name={a.channel === "voice" ? "phone" : "message"}
+                      size={15}
+                    />
+                  </span>
+                  <span className="who">{a.vendorName}</span>
+                  <Badge tone="plain">
+                    {a.channel === "voice" ? "AI voice call" : "WhatsApp"}
+                  </Badge>
+                  <Badge
+                    tone={
+                      a.status === "replied"
+                        ? "success"
+                        : a.status === "no_response"
+                          ? "warning"
+                          : a.status === "in_progress"
+                            ? "info"
+                            : "neutral"
+                    }
+                  >
+                    {a.status === "in_progress"
+                      ? "Calling"
+                      : a.status === "queued"
+                        ? "Queued"
+                        : a.status === "replied"
+                          ? "Replied"
+                          : "No response"}
+                  </Badge>
+                  <span className="time">
+                    {a.startedAt ? `started ${formatTime(a.startedAt)}` : ""}
+                    {a.repliedAt ? `, resolved ${formatTime(a.repliedAt)}` : ""}
+                  </span>
+                </div>
+
+                <div className="transcript">
+                  <div className="bubble out">
+                    <span className="who">
+                      {a.channel === "voice" ? "Agent said" : "Message sent"}
+                    </span>
+                    {a.outbound}
+                  </div>
+                  {a.reply ? (
+                    <div className="bubble">
+                      <span className="who">Vendor reply, raw text</span>
+                      {a.reply}
+                    </div>
+                  ) : a.status === "no_response" ? (
+                    <div className="bubble">
+                      <span className="who">Vendor reply</span>
+                      <span className="muted">
+                        No reply inside the timeout. One reminder is logged,
+                        then the vendor is marked no response.
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </>
+=======
             );
           })
+>>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
         )}
       </Panel>
 

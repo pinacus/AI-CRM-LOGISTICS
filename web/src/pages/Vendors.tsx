@@ -68,7 +68,6 @@ export default function Vendors() {
                   <th className="num">On time</th>
                   <th className="num">Price vs market</th>
                   <th className="num">Avg response</th>
-                  <th>Language</th>
                   <th>Channel</th>
                   <th>Terms</th>
                   <th>Flags</th>
@@ -101,7 +100,6 @@ export default function Vendors() {
                       {v.avgRateVsMarketPct}%
                     </td>
                     <td className="num">{v.avgResponseMins} min</td>
-                    <td className="small">{v.language}</td>
                     <td className="small">{v.preferredChannel}</td>
                     <td className="num">{v.paymentTermsDays} d</td>
                     <td>

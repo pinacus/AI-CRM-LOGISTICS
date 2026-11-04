@@ -51,7 +51,6 @@ export interface Vendor {
   /** negative means cheaper than market */
   avgRateVsMarketPct: number;
   avgResponseMins: number;
-  language: 'tamil' | 'english' | 'both';
   preferredChannel: Channel | 'both';
   paymentTermsDays: number;
   kycDone: boolean;
@@ -145,6 +144,31 @@ export interface OutreachAttempt {
   reply: string | null;
   startedAt: string | null;
   repliedAt: string | null;
+}
+
+/* ------------------------------------------------------------ Sarvam calls */
+
+export type SarvamCallStatus = 'queued' | 'connected' | 'no_answer' | 'busy' | 'failed';
+
+/** One AI price enquiry call placed through the Sarvam Voice Agents API. */
+export interface SarvamCall {
+  id: string;
+  /** Sarvam attempt id, echoed back on the call webhook */
+  attemptId: string | null;
+  requirementId: string;
+  vendorId: number;
+  vendorName: string;
+  phone: string;
+  /** script the Sarvam agent follows on the call */
+  script: string;
+  status: SarvamCallStatus;
+  interactionId: string | null;
+  durationSec: number | null;
+  failureReason: string | null;
+  transcript: string | null;
+  quoteId: string | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 /* ------------------------------------------------------------------ quotes */

@@ -1,10 +1,10 @@
 /**
  * Quote parser for free text replies: voice transcripts and WhatsApp messages.
  *
- * Vendors reply in Tamil, Tanglish and English, for example:
- *   "38500 podhum, toll extra"
- *   "ithu 41k, toll extra"
- *   "ரூபாய் 41,000, நாளைக்கு வண்டி ரெடி"
+ * Vendors reply in short English and shorthand, for example:
+ *   "38500, toll extra"
+ *   "rate 41k, toll extra"
+ *   "Rs. 41,000, vehicle ready tomorrow"
  *
  * This is a deterministic rules parser with an explicit confidence score. Anything
  * below the confidence threshold, or far from the rate card reference, is flagged
@@ -24,13 +24,80 @@ export const RATE_CARD_TOLERANCE = 0.3;
 const MIN_PLAUSIBLE_RATE = 3000;
 const MAX_PLAUSIBLE_RATE = 300000;
 
-const TAMIL_DIGITS: Record<string, string> = {
-  '௦': '0', '௧': '1', '௨': '2', '௩': '3', '௪': '4',
-  '௫': '5', '௬': '6', '௭': '7', '௮': '8', '௯': '9',
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
 };
 
-export function normaliseDigits(text: string): string {
-  return text.replace(/[௦-௯]/g, (d) => TAMIL_DIGITS[d] ?? d);
+const SCALE_WORDS: Record<string, number> = { hundred: 100, thousand: 1000, lakh: 100000, lakhs: 100000 };
+
+/** Words that may sit between number words without breaking the amount. */
+const FILLER_WORDS = new Set(['and', 'rupee', 'rupees', 'rs', 'inr', 'only', 'around', 'about']);
+
+/**
+ * Reads an amount spoken as words ("fifteen thousand", "twenty five thousand
+ * five hundred") out of a transcript. Voice replies rarely contain digits.
+ */
+function findSpokenRateCandidates(text: string): number[] {
+  const found: number[] = [];
+  let total = 0;
+  let current = 0;
+
+  const flush = () => {
+    const value = total + current;
+    if (value >= MIN_PLAUSIBLE_RATE && value <= MAX_PLAUSIBLE_RATE) found.push(value);
+    total = 0;
+    current = 0;
+  };
+
+  for (const token of text.toLowerCase().split(/[^a-z]+/)) {
+    if (token.length === 0) continue;
+    const small = NUMBER_WORDS[token];
+    if (small !== undefined) {
+      current += small;
+      continue;
+    }
+    const scale = SCALE_WORDS[token];
+    if (scale !== undefined) {
+      if (scale === 100) current = Math.max(current, 1) * 100;
+      else {
+        total += Math.max(current, 1) * scale;
+        current = 0;
+      }
+      continue;
+    }
+    if (FILLER_WORDS.has(token)) continue;
+    flush();
+  }
+  flush();
+
+  return found;
 }
 
 function findRateCandidates(text: string): number[] {
@@ -49,11 +116,14 @@ function findRateCandidates(text: string): number[] {
     if (!Number.isNaN(n) && n >= MIN_PLAUSIBLE_RATE && n <= MAX_PLAUSIBLE_RATE) found.push(n);
   }
 
+  // Spoken replies arrive as words: "fifteen thousand", "twenty five thousand only".
+  found.push(...findSpokenRateCandidates(text));
+
   return Array.from(new Set(found));
 }
 
 export function parseQuoteReply(raw: string, referenceRate?: number | null): ParsedQuote {
-  const text = normaliseDigits(raw).trim();
+  const text = raw.trim();
   const lower = text.toLowerCase();
   const conditions: string[] = [];
 
@@ -73,8 +143,8 @@ export function parseQuoteReply(raw: string, referenceRate?: number | null): Par
   if (/\bloading\b|\bunloading\b/.test(lower) && /(extra|not|charge)/.test(lower)) conditions.push('Loading and unloading extra');
 
   let availableOnDate: boolean | null = null;
-  if (/(not available|no vehicle|vehicle illa|empty illa|no lorry|வண்டி இல்ல)/.test(lower)) availableOnDate = false;
-  else if (/(available|ready|irukku|ready to load|vehicle ready|ready ah|ரெடி|இருக்கு)/.test(lower)) availableOnDate = true;
+  if (/(not available|no vehicle|no lorry)/.test(lower)) availableOnDate = false;
+  else if (/(available|ready|ready to load|vehicle ready)/.test(lower)) availableOnDate = true;
 
   const candidates = findRateCandidates(text);
   if (candidates.length === 0) {
@@ -85,9 +155,9 @@ export function parseQuoteReply(raw: string, referenceRate?: number | null): Par
   const rate = candidates[0] ?? null;
   let confidence = 0.62;
   if (candidates.length === 1) confidence += 0.15;
-  if (/\b(rs|inr|rupees|₹)\b|ரூபாய்|ரூபாயில்/.test(lower)) confidence += 0.1;
+  if (/\b(rs|inr|rupees|₹)\b/.test(lower)) confidence += 0.1;
   if (conditions.length > 0) confidence += 0.05;
-  if (/\b(maybe|call me|confirm|check pannu|sollren)\b/.test(lower)) confidence -= 0.2;
+  if (/\b(maybe|call me|confirm|check|will send)\b/.test(lower)) confidence -= 0.2;
   if (candidates.length > 2) confidence -= 0.15;
 
   if (referenceRate && referenceRate > 0 && rate !== null) {

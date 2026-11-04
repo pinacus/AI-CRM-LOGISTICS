@@ -275,7 +275,7 @@ export default function NewRequirement() {
                 <strong>Vendor matching:</strong>&nbsp;<span>hard filters, then the weighted score, top 8 shortlisted.</span>
               </li>
               <li>
-                <strong>AI outreach:</strong>&nbsp;<span>voice call and Tamil WhatsApp go out to the shortlist in parallel.</span>
+                <strong>AI outreach:</strong>&nbsp;<span>voice call and WhatsApp message go out to the shortlist in parallel.</span>
               </li>
               <li>
                 <strong>L1 suggestion:</strong>&nbsp;<span>replies are parsed, ranked, flagged if they look wrong.</span>

@@ -10,7 +10,7 @@ const OBJECTIVES: { title: string; body: string }[] = [
   },
   {
     title: 'Collect quotes without manual calls',
-    body: 'An AI voice call in Tamil and a Tamil WhatsApp message go to the shortlisted transporters at the same time. The sales agent does not dial anyone.',
+    body: 'An AI voice call and a WhatsApp message go to the shortlisted transporters at the same time. The sales agent does not dial anyone.',
   },
   {
     title: 'Suggest the lowest rate',
@@ -34,7 +34,7 @@ const FLOW: { step: string; detail: string }[] = [
   { step: 'Requirement intake', detail: 'Customer, route, cargo, weight, vehicle type and loading date are logged in the CRM.' },
   { step: 'Instant price check', detail: 'The rate card is searched. An exact hit returns a reference price immediately.' },
   { step: 'Vendor shortlisting', detail: 'Hard filters remove vendors who cannot do the job, a weighted score ranks the rest.' },
-  { step: 'AI outreach', detail: 'Voice calls and Tamil WhatsApp messages go out to the top vendors in parallel.' },
+  { step: 'AI outreach', detail: 'Voice calls and WhatsApp messages go out to the top vendors in parallel.' },
   { step: 'Quote capture', detail: 'Replies are transcribed and parsed into a numeric rate with a confidence score.' },
   { step: 'L1 suggestion', detail: 'Average, lowest and spread are computed. Low confidence or extreme rates are flagged.' },
   { step: 'Customer quote', detail: 'The agent adds margin, shares the price, and marks the customer confirmed.' },
@@ -87,7 +87,7 @@ export default function Landing() {
           <h1>From customer requirement to confirmed vendor, without the sales agent making a single call.</h1>
           <p className="lead">
             FreightDesk is a working MVP for freight brokerage in South India. It matches transporters
-            against your vendor master, sends an AI voice call and a Tamil WhatsApp message asking for their rate,
+            against your vendor master, sends an AI voice call and a WhatsApp message asking for their rate,
             parses the replies, suggests the lowest rate to your sales agent, then carries the job through trip,
             invoice and payment in the same record.
           </p>
@@ -174,8 +174,8 @@ export default function Landing() {
             credentials switches sends to the live providers, and replies arrive on the webhook.
           </div>
           <div className="callout info">
-            <strong>The quote parser is real, not scripted.</strong> Replies such as &quot;38500 podhum, toll extra&quot;,
-            &quot;ithu 41k&quot; and Tamil numerals go through a rules parser that returns a rate, conditions and a
+            <strong>The quote parser is real, not scripted.</strong> Replies such as &quot;38500, toll extra&quot;,
+            &quot;rate 41k&quot; and &quot;Rs. 39,500&quot; go through a rules parser that returns a rate, conditions and a
             confidence score. Replies under 0.80 confidence, or more than 30% away from the rate card reference, are
             flagged for a sales agent before they can reach L1.
           </div>

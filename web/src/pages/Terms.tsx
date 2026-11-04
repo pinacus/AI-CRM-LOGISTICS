@@ -73,7 +73,7 @@ export default function Terms() {
 
         <h2>8. Governing law</h2>
         <p>
-          These terms are governed by the laws of India, with courts in Tamil Nadu having jurisdiction, matching the
+          These terms are governed by the laws of India, with courts in Chennai having jurisdiction, matching the
           operating region of the brokerage this product was written for.
         </p>
 

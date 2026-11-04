@@ -23,6 +23,7 @@ const COLLECTIONS = [
   'matches',
   'attempts',
   'quotes',
+  'calls',
   'orders',
   'trips',
   'invoices',
@@ -113,6 +114,7 @@ export function hydrate(db: Db): Store | null {
   store.requirements = rowsOf(db, 'requirements') as unknown as Store['requirements'];
   store.attempts = rowsOf(db, 'attempts') as unknown as Store['attempts'];
   store.quotes = rowsOf(db, 'quotes') as unknown as Store['quotes'];
+  store.calls = rowsOf(db, 'calls') as unknown as Store['calls'];
   store.orders = rowsOf(db, 'orders') as unknown as Store['orders'];
   store.trips = rowsOf(db, 'trips') as unknown as Store['trips'];
   store.invoices = rowsOf(db, 'invoices') as unknown as Store['invoices'];
@@ -156,6 +158,7 @@ export function persist(db: Db, store: Store): void {
     writeCollection(db, 'requirements', store.requirements);
     writeCollection(db, 'attempts', store.attempts);
     writeCollection(db, 'quotes', store.quotes);
+    writeCollection(db, 'calls', store.calls);
     writeCollection(db, 'orders', store.orders);
     writeCollection(db, 'trips', store.trips);
     writeCollection(db, 'invoices', store.invoices);

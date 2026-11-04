@@ -6,6 +6,7 @@ import type {
   Quote,
   RateCardRow,
   Requirement,
+  SarvamCall,
   Trip,
   Vendor,
 } from '../../shared/types';
@@ -26,6 +27,7 @@ export interface Store {
   matches: Record<string, MatchResult>;
   attempts: OutreachAttempt[];
   quotes: Quote[];
+  calls: SarvamCall[];
   orders: Order[];
   trips: Trip[];
   invoices: Invoice[];
@@ -33,6 +35,7 @@ export interface Store {
     requirement: number;
     attempt: number;
     quote: number;
+    sarvamCall: number;
     order: number;
     trip: number;
     invoice: number;
@@ -48,10 +51,11 @@ export function newStore(): Store {
     matches: {},
     attempts: [],
     quotes: [],
+    calls: [],
     orders: [],
     trips: [],
     invoices: [],
-    counters: { requirement: 1006, attempt: 0, quote: 0, order: 0, trip: 0, invoice: 0 },
+    counters: { requirement: 1006, attempt: 0, quote: 0, sarvamCall: 0, order: 0, trip: 0, invoice: 0 },
   };
 }
 

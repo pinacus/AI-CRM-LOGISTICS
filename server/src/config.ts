@@ -60,6 +60,30 @@ export interface TwilioWhatsappConfig {
   template?: string;
 }
 
+export interface SarvamConfig {
+  /** Model API key, sent as api-subscription-key to api.sarvam.ai */
+  apiKey: string | null;
+  /**
+   * Workspace API key for apps.sarvam.ai, sent as X-API-Key on instant outbound
+   * calls. This is a different credential from the model API key.
+   */
+  voiceApiKey: string | null;
+  modelBaseUrl: string;
+  model: string;
+  /** Sarvam Voice Agents ids, copied from the dashboard URL */
+  orgId: string | null;
+  workspaceId: string | null;
+  appId: string | null;
+  appVersion: number;
+  connectionId: string | null;
+  agentPhoneNumber: string | null;
+  /** webhook Sarvam posts call results to; must carry ?token=<WEBHOOK_TOKEN> */
+  webhookUrl: string | null;
+  /** the single vendor this integration is allowed to call */
+  vendorName: string;
+  vendorPhone: string;
+}
+
 export interface AppConfig {
   port: number;
   dbPath: string;
@@ -70,6 +94,7 @@ export interface AppConfig {
   replyTimeoutMs: number;
   twilio: TwilioConfig | null;
   twilioWhatsapp: TwilioWhatsappConfig | null;
+  sarvam: SarvamConfig;
 }
 
 function env(name: string): string | undefined {
@@ -107,6 +132,21 @@ export function loadConfig(): AppConfig {
             ...(waTemplate ? { template: waTemplate } : {}),
           }
         : null,
+    sarvam: {
+      apiKey: env("SARVAM_API_KEY") ?? null,
+      voiceApiKey: env("SARVAM_VOICE_API_KEY") ?? null,
+      modelBaseUrl: env("SARVAM_MODEL_BASE_URL") ?? "https://api.sarvam.ai",
+      model: env("SARVAM_MODEL") ?? "sarvam-105b",
+      orgId: env("SARVAM_ORG_ID") ?? null,
+      workspaceId: env("SARVAM_WORKSPACE_ID") ?? null,
+      appId: env("SARVAM_APP_ID") ?? null,
+      appVersion: Number(env("SARVAM_APP_VERSION") ?? 1) || 1,
+      connectionId: env("SARVAM_CONNECTION_ID") ?? null,
+      agentPhoneNumber: env("SARVAM_AGENT_PHONE_NUMBER") ?? null,
+      webhookUrl: env("SARVAM_WEBHOOK_URL") ?? null,
+      vendorName: env("SARVAM_VENDOR_NAME") ?? "David Transportation",
+      vendorPhone: env("SARVAM_VENDOR_PHONE") ?? "6385106931",
+    },
   };
 }
 

@@ -7,7 +7,7 @@ import { channelModes } from './channels';
 import { config } from './config';
 import { hydrate, openDatabase, persist } from './db';
 import { createApiRouter, type ServerContext } from './routes';
-import { seedStore } from './seed';
+import { ensureSarvamVendor, seedStore } from './seed';
 import { setMutationListener } from './simulation';
 import { newStore } from './store';
 
@@ -48,6 +48,11 @@ function boot(): void {
   const seededNow = existing === null;
   if (seededNow) {
     seedStore(store);
+  }
+  // Keep the Sarvam AI call target in the vendor master on every boot, so an
+  // existing database also gets David Transportation added or corrected.
+  const ensured = ensureSarvamVendor(store);
+  if (seededNow || ensured.added) {
     persist(db, store);
   }
 
@@ -67,6 +72,7 @@ function boot(): void {
     console.log(`Database ${config.dbPath} (${seededNow ? 'seeded fresh' : 'existing data loaded'})`);
     console.log(`Vendors ${store.vendors.length}, rate card rows ${store.rateCard.length}, requirements ${store.requirements.length}`);
     console.log(`Channels: whatsapp=${modes.whatsapp}, voice=${modes.voice}`);
+    console.log(`Sarvam AI: ${config.sarvam.apiKey ? 'configured' : 'not configured'}, calls ${config.sarvam.vendorName} (${config.sarvam.vendorPhone}) only`);
     if (config.webhookToken === 'freightdesk-dev-token') {
       console.log('WEBHOOK_TOKEN is not set, using the development default.');
     }
