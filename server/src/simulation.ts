@@ -338,8 +338,10 @@ export interface InboundOutcome {
 
 /**
  * Applies a reply that arrived on a webhook: matches it to the oldest open
- * outreach attempt for that vendor number, parses it with the same quote parser
- * the simulator uses, and settles the requirement when every attempt is done.
+ * newest open outreach attempt for that vendor number, parses it with the same
+ * quote parser the simulator uses, and settles the requirement when every
+ * attempt is done. Newest-first avoids routing a reply to stale outreach when
+ * the same vendor is contacted for more than one requirement.
  */
 export function applyInboundReply(
   store: Store,
@@ -352,7 +354,7 @@ export function applyInboundReply(
   const open = store.attempts.filter(
     (a) => a.status === "queued" || a.status === "in_progress",
   );
-  const attempt = open.find((a) => {
+  const attempt = [...open].reverse().find((a) => {
     const vendor = store.vendors.find((v) => v.id === a.vendorId);
     if (!vendor) return false;
     return phoneKey(vendor.phone) === key || phoneKey(vendor.whatsapp) === key;

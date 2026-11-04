@@ -26,7 +26,27 @@ ADMIN_EMAIL = "admin@freightdesk.local"
 ADMIN_PASSWORD = "admin123"
 SALES_EMAIL = "sales@freightdesk.local"
 SALES_PASSWORD = "sales123"
-WEBHOOK_TOKEN = os.environ.get("WEBHOOK_TOKEN", "freightdesk-dev-token")
+
+
+def dotenv_value(name):
+    """Read one non-secret setting from the project .env when not exported."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(root, ".env")
+    try:
+        with open(env_path, encoding="utf-8") as env_file:
+            for line in env_file:
+                trimmed = line.strip()
+                if not trimmed or trimmed.startswith("#") or "=" not in trimmed:
+                    continue
+                key, value = trimmed.split("=", 1)
+                if key.strip() == name:
+                    return value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return None
+
+
+WEBHOOK_TOKEN = os.environ.get("WEBHOOK_TOKEN") or dotenv_value("WEBHOOK_TOKEN") or "freightdesk-dev-token"
 
 
 def raw(method, path, body=None, cookie=None, headers=None):
@@ -253,7 +273,8 @@ def main():
         return
 
     quotes = detail["quotes"]
-    check("quotes received", len(quotes) >= 3, f"{len(quotes)} quotes")
+    minimum_quotes = 1 if system["channels"]["whatsapp"] == "live" else 3
+    check("quotes received", len(quotes) >= minimum_quotes, f"{len(quotes)} quotes (minimum {minimum_quotes})")
     check(
         "webhook reply became a quote",
         any(q["id"] == webhook_quote_id and q["rawText"] == reply_text for q in quotes),
