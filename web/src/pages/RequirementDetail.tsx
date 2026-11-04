@@ -448,15 +448,30 @@ export default function RequirementDetail() {
         title="Sarvam AI price enquiry"
         hint={`Instant outbound call from Sarvam Voice Agents, restricted to ${sarvam.vendorName} on ${sarvam.vendorPhone}`}
         actions={
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            disabled={busy !== null || !sarvam.configured}
-            onClick={() => void action('sarvam', () => api.post(`/api/requirements/${id}/sarvam-call`))}
-          >
-            {busy === 'sarvam' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
-            Call vendor for the rate
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <a
+              href={`https://wa.me/91${sarvam.vendorPhone.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(
+                `Hello ${sarvam.vendorName}, we need a ${requirement.vehicleType.replace('_', ' ')} (${requirement.bodySizeFt} ft) for ${requirement.weightT} tonnes from ${requirement.origin} to ${requirement.destination}. Loading: ${requirement.loadingDate}, ${requirement.loadingTime}. Please reply with your best rate (Rs.) for this trip.`
+              )}`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-secondary btn-sm"
+              title={`Open WhatsApp chat with ${sarvam.vendorName}`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Icon name="message" size={15} />
+              WhatsApp {sarvam.vendorName}
+            </a>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={busy !== null || !sarvam.configured}
+              onClick={() => void action('sarvam', () => api.post(`/api/requirements/${id}/sarvam-call`))}
+            >
+              {busy === 'sarvam' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+              Call vendor for the rate
+            </button>
+          </div>
         }
         tight
       >

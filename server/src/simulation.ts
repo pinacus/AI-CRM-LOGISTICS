@@ -206,6 +206,16 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
       return;
     }
 
+    const isSarvamVendor =
+      phoneKey(vendor.phone) === phoneKey(config.sarvam.vendorPhone) ||
+      vendor.name.toLowerCase() === config.sarvam.vendorName.toLowerCase();
+
+    if (isSarvamVendor) {
+      // David Transportation is handled exclusively by Sarvam AI voice call and WhatsApp.
+      // Do not generate simulated mock replies for David.
+      return;
+    }
+
     const responds = rng() < 0.72;
     const tollExtra = rng() < 0.3;
     const jitter = rng() * 0.14 - 0.055;
