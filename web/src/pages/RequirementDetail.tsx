@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-=======
-import { useCallback, useEffect, useMemo, useState } from "react";
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
 import { Link, useParams } from "react-router-dom";
 import {
   api,
@@ -106,10 +102,7 @@ export default function RequirementDetail() {
     detail &&
     (detail.outreachRunning ||
       detail.lockInProgress ||
-<<<<<<< HEAD
       pendingCall ||
-=======
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
       detail.requirement.status === "outreach" ||
       detail.requirement.status === "locking"),
   );
@@ -119,7 +112,6 @@ export default function RequirementDetail() {
     return () => window.clearInterval(handle);
   }, [shouldPoll, load]);
 
-<<<<<<< HEAD
   // A placed call keeps its "queued" status until the Sarvam result is pulled,
   // because the agent cannot reach this app over a public webhook. Pull it here
   // so the transcript and the resulting quote show up without a manual step.
@@ -139,9 +131,6 @@ export default function RequirementDetail() {
       .then(() => load())
       .catch(() => undefined);
   }, [detail, load]);
-
-=======
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
   async function action(
     name: string,
     run: () => Promise<unknown>,
@@ -493,11 +482,7 @@ export default function RequirementDetail() {
       <Panel
         title="Outreach monitor"
         hint={
-<<<<<<< HEAD
           attempts.length > 0 || sarvamCalls.length > 0
-=======
-          attempts.length > 0
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
             ? "Voice calls and WhatsApp messages sent by the AI agent, with raw replies as they arrive"
             : "No outreach started for this requirement"
         }
@@ -508,7 +493,6 @@ export default function RequirementDetail() {
             Start AI outreach once the shortlist looks right.
           </EmptyState>
         ) : (
-<<<<<<< HEAD
           <>
             {sarvamCalls.map((c) => (
               <div className="attempt" key={c.id}>
@@ -547,56 +531,11 @@ export default function RequirementDetail() {
                       ? `, ${Math.round(c.durationSec)}s`
                       : ""}
                     {c.quoteId ? `, quoted ${c.quoteId}` : ""}
-=======
-          attempts.map((a) => {
-            const deliveryFailed =
-              a.reply?.startsWith("Not delivered:") ?? false;
-            return (
-              <div className="attempt" key={a.id}>
-                <div className="attempt-head">
-                  <span style={{ color: "var(--muted)" }}>
-                    <Icon
-                      name={a.channel === "voice" ? "phone" : "message"}
-                      size={15}
-                    />
-                  </span>
-                  <span className="who">{a.vendorName}</span>
-                  <Badge tone="plain">
-                    {a.channel === "voice" ? "AI voice call" : "Tamil WhatsApp"}
-                  </Badge>
-                  <Badge
-                    tone={
-                      deliveryFailed
-                        ? "danger"
-                        : a.status === "replied"
-                          ? "success"
-                          : a.status === "no_response"
-                            ? "warning"
-                            : a.status === "in_progress"
-                              ? "info"
-                              : "neutral"
-                    }
-                  >
-                    {deliveryFailed
-                      ? "Delivery failed"
-                      : a.status === "in_progress"
-                        ? "Calling"
-                        : a.status === "queued"
-                          ? "Queued"
-                          : a.status === "replied"
-                            ? "Replied"
-                            : "No response"}
-                  </Badge>
-                  <span className="time">
-                    {a.startedAt ? `started ${formatTime(a.startedAt)}` : ""}
-                    {a.repliedAt ? `, resolved ${formatTime(a.repliedAt)}` : ""}
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
                   </span>
                 </div>
 
                 <div className="transcript">
                   <div className="bubble out">
-<<<<<<< HEAD
                     <span className="who">Agent said</span>
                     {c.script}
                   </div>
@@ -631,38 +570,10 @@ export default function RequirementDetail() {
                       >
                         Fetch result now
                       </button>
-=======
-                    <span className="who">
-                      {deliveryFailed
-                        ? "Delivery attempted"
-                        : a.channel === "voice"
-                          ? "Agent said"
-                          : "Message sent"}
-                    </span>
-                    {a.outbound}
-                  </div>
-                  {a.reply ? (
-                    <div className="bubble">
-                      <span className="who">
-                        {deliveryFailed
-                          ? "Delivery error"
-                          : "Vendor reply, raw text"}
-                      </span>
-                      {a.reply}
-                    </div>
-                  ) : a.status === "no_response" ? (
-                    <div className="bubble">
-                      <span className="who">Vendor reply</span>
-                      <span className="muted">
-                        No reply inside the timeout. One reminder is logged,
-                        then the vendor is marked no response.
-                      </span>
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
                     </div>
                   ) : null}
                 </div>
               </div>
-<<<<<<< HEAD
             ))}
             {attempts.map((a) => (
               <div className="attempt" key={a.id}>
@@ -675,26 +586,30 @@ export default function RequirementDetail() {
                   </span>
                   <span className="who">{a.vendorName}</span>
                   <Badge tone="plain">
-                    {a.channel === "voice" ? "AI voice call" : "WhatsApp"}
+                    {a.channel === "voice" ? "AI voice call" : "Tamil WhatsApp"}
                   </Badge>
                   <Badge
                     tone={
-                      a.status === "replied"
-                        ? "success"
-                        : a.status === "no_response"
-                          ? "warning"
-                          : a.status === "in_progress"
-                            ? "info"
-                            : "neutral"
+                      a.reply?.startsWith("Not delivered:")
+                        ? "danger"
+                        : a.status === "replied"
+                          ? "success"
+                          : a.status === "no_response"
+                            ? "warning"
+                            : a.status === "in_progress"
+                              ? "info"
+                              : "neutral"
                     }
                   >
-                    {a.status === "in_progress"
-                      ? "Calling"
-                      : a.status === "queued"
-                        ? "Queued"
-                        : a.status === "replied"
-                          ? "Replied"
-                          : "No response"}
+                    {a.reply?.startsWith("Not delivered:")
+                      ? "Delivery failed"
+                      : a.status === "in_progress"
+                        ? "Calling"
+                        : a.status === "queued"
+                          ? "Queued"
+                          : a.status === "replied"
+                            ? "Replied"
+                            : "No response"}
                   </Badge>
                   <span className="time">
                     {a.startedAt ? `started ${formatTime(a.startedAt)}` : ""}
@@ -705,13 +620,21 @@ export default function RequirementDetail() {
                 <div className="transcript">
                   <div className="bubble out">
                     <span className="who">
-                      {a.channel === "voice" ? "Agent said" : "Message sent"}
+                      {a.reply?.startsWith("Not delivered:")
+                        ? "Delivery attempted"
+                        : a.channel === "voice"
+                          ? "Agent said"
+                          : "Message sent"}
                     </span>
                     {a.outbound}
                   </div>
                   {a.reply ? (
                     <div className="bubble">
-                      <span className="who">Vendor reply, raw text</span>
+                      <span className="who">
+                        {a.reply.startsWith("Not delivered:")
+                          ? "Delivery error"
+                          : "Vendor reply, raw text"}
+                      </span>
                       {a.reply}
                     </div>
                   ) : a.status === "no_response" ? (
@@ -727,10 +650,6 @@ export default function RequirementDetail() {
               </div>
             ))}
           </>
-=======
-            );
-          })
->>>>>>> 0dc848a3d4da9857d346aaad8cb6dd95506f8d1c
         )}
       </Panel>
 
