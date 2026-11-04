@@ -1,33 +1,57 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api, formatDateTime, REQUIREMENT_STATUS_LABEL, rupees, type RequirementListItem } from '../api';
-import { EmptyState, Icon, Panel, RequirementStatusBadge } from '../components/ui';
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  api,
+  formatDateTime,
+  REQUIREMENT_STATUS_LABEL,
+  rupees,
+  type RequirementListItem,
+} from "../api";
+import {
+  EmptyState,
+  Icon,
+  Panel,
+  RequirementStatusBadge,
+} from "../components/ui";
 
-const FILTERS = ['all', 'open', 'confirmed', 'closed'] as const;
+const FILTERS = ["all", "open", "confirmed", "closed"] as const;
 type Filter = (typeof FILTERS)[number];
 
-const OPEN = new Set(['intake', 'shortlisted', 'outreach', 'quoted', 'awaiting_customer', 'locking']);
+const OPEN = new Set([
+  "intake",
+  "shortlisted",
+  "outreach",
+  "quoted",
+  "awaiting_customer",
+  "locking",
+]);
 
 export default function Requirements() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<RequirementListItem[]>([]);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .get<RequirementListItem[]>('/api/requirements')
+      .get<RequirementListItem[]>("/api/requirements")
       .then(setRows)
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
-      if (filter === 'open' && !OPEN.has(r.status)) return false;
-      if (filter === 'confirmed' && !(r.status === 'confirmed' || r.status === 'closed')) return false;
-      if (filter === 'closed' && r.status !== 'closed') return false;
+      if (filter === "open" && !OPEN.has(r.status)) return false;
+      if (
+        filter === "confirmed" &&
+        !(r.status === "confirmed" || r.status === "closed")
+      )
+        return false;
+      if (filter === "closed" && r.status !== "closed") return false;
       if (q.length === 0) return true;
       return (
         r.id.toLowerCase().includes(q) ||
@@ -45,7 +69,8 @@ export default function Requirements() {
         <div>
           <h1>Requirements</h1>
           <div className="sub">
-            Customer freight requirements logged in the CRM, with the stage each one has reached.
+            Customer freight requirements logged in the CRM, with the stage each
+            one has reached.
           </div>
         </div>
         <div className="btn-row">
@@ -75,10 +100,18 @@ export default function Requirements() {
                 <button
                   key={f}
                   type="button"
-                  className={filter === f ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
+                  className={
+                    filter === f ? "btn btn-sm btn-primary" : "btn btn-sm"
+                  }
                   onClick={() => setFilter(f)}
                 >
-                  {f === 'all' ? 'All' : f === 'open' ? 'Open' : f === 'confirmed' ? 'Confirmed' : 'Closed'}
+                  {f === "all"
+                    ? "All"
+                    : f === "open"
+                      ? "Open"
+                      : f === "confirmed"
+                        ? "Confirmed"
+                        : "Closed"}
                 </button>
               ))}
             </div>
@@ -86,7 +119,9 @@ export default function Requirements() {
         }
         tight
       >
-        {visible.length === 0 ? (
+        {loading ? (
+          <div className="empty">Loading requirements...</div>
+        ) : visible.length === 0 ? (
           <EmptyState title="No requirements match">
             Clear the search, or log a new requirement.
           </EmptyState>
@@ -107,7 +142,11 @@ export default function Requirements() {
               </thead>
               <tbody>
                 {visible.map((r) => (
-                  <tr key={r.id} className="row-click" onClick={() => navigate(`/app/requirements/${r.id}`)}>
+                  <tr
+                    key={r.id}
+                    className="row-click"
+                    onClick={() => navigate(`/app/requirements/${r.id}`)}
+                  >
                     <td className="td-strong">
                       {r.id}
                       <span className="td-sub">{r.customerName}</span>
@@ -127,12 +166,14 @@ export default function Requirements() {
                     <td>
                       <RequirementStatusBadge status={r.status} />
                     </td>
-                    <td className="num">{r.shortlistSize || '-'}</td>
+                    <td className="num">{r.shortlistSize || "-"}</td>
                     <td className="num">
                       {r.quoteCount}
-                      {r.rateCardMatch === 'exact' ? <span className="td-sub">rate card hit</span> : null}
+                      {r.rateCardMatch === "exact" ? (
+                        <span className="td-sub">rate card hit</span>
+                      ) : null}
                     </td>
-                    <td className="nowrap">{r.tripStatus ?? '-'}</td>
+                    <td className="nowrap">{r.tripStatus ?? "-"}</td>
                     <td className="nowrap">{formatDateTime(r.createdAt)}</td>
                   </tr>
                 ))}
