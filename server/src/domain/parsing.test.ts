@@ -24,6 +24,17 @@ test('parses comma grouped rates with a currency marker', () => {
   assert.ok(parsed.confidence >= CONFIDENCE_THRESHOLD, `confidence ${parsed.confidence}`);
 });
 
+test('parses a spoken amount written in words', () => {
+  const parsed = parseQuoteReply('Fifteen thousand rupees, toll included');
+  assert.equal(parsed.rate, 15000);
+  assert.equal(parsed.tollIncluded, true);
+});
+
+test('parses a compound spoken amount', () => {
+  assert.equal(parseQuoteReply('twenty five thousand five hundred only').rate, 25500);
+  assert.equal(parseQuoteReply('one lakh twenty thousand rupees').rate, 120000);
+});
+
 test('a reply without a number yields no rate and low confidence', () => {
   const parsed = parseQuoteReply('Call me back, rate will be sent later');
   assert.equal(parsed.rate, null);

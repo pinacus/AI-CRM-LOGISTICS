@@ -30,6 +30,7 @@ twilio: { accountSid: 'AC123', authToken: 'secret', from: '+911100001111' },
     },
     sarvam: {
       apiKey: 'sarvam-key',
+      voiceApiKey: 'sarvam-voice-key',
       modelBaseUrl: 'https://api.sarvam.ai',
       model: 'sarvam-105b',
       orgId: 'org',
@@ -195,10 +196,10 @@ test("placeVoiceCall posts to Twilio and surfaces errors", async () => {
 
 test("parseInbound handles Twilio form, WhatsApp JSON and plain JSON", () => {
   assert.deepEqual(
-    parseInbound({ From: "+919840011223", Body: "38500 podhum" }),
+    parseInbound({ From: "+919840011223", Body: "38500 rupees, toll extra" }),
     {
       phone: "+919840011223",
-      text: "38500 podhum",
+      text: "38500 rupees, toll extra",
     },
   );
   assert.deepEqual(parseInbound({ from: "+919840011223", text: "41000" }), {

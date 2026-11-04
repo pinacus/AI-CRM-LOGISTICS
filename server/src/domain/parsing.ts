@@ -24,6 +24,82 @@ export const RATE_CARD_TOLERANCE = 0.3;
 const MIN_PLAUSIBLE_RATE = 3000;
 const MAX_PLAUSIBLE_RATE = 300000;
 
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+};
+
+const SCALE_WORDS: Record<string, number> = { hundred: 100, thousand: 1000, lakh: 100000, lakhs: 100000 };
+
+/** Words that may sit between number words without breaking the amount. */
+const FILLER_WORDS = new Set(['and', 'rupee', 'rupees', 'rs', 'inr', 'only', 'around', 'about']);
+
+/**
+ * Reads an amount spoken as words ("fifteen thousand", "twenty five thousand
+ * five hundred") out of a transcript. Voice replies rarely contain digits.
+ */
+function findSpokenRateCandidates(text: string): number[] {
+  const found: number[] = [];
+  let total = 0;
+  let current = 0;
+
+  const flush = () => {
+    const value = total + current;
+    if (value >= MIN_PLAUSIBLE_RATE && value <= MAX_PLAUSIBLE_RATE) found.push(value);
+    total = 0;
+    current = 0;
+  };
+
+  for (const token of text.toLowerCase().split(/[^a-z]+/)) {
+    if (token.length === 0) continue;
+    const small = NUMBER_WORDS[token];
+    if (small !== undefined) {
+      current += small;
+      continue;
+    }
+    const scale = SCALE_WORDS[token];
+    if (scale !== undefined) {
+      if (scale === 100) current = Math.max(current, 1) * 100;
+      else {
+        total += Math.max(current, 1) * scale;
+        current = 0;
+      }
+      continue;
+    }
+    if (FILLER_WORDS.has(token)) continue;
+    flush();
+  }
+  flush();
+
+  return found;
+}
+
 function findRateCandidates(text: string): number[] {
   const found: number[] = [];
 
@@ -39,6 +115,9 @@ function findRateCandidates(text: string): number[] {
     const n = Number.parseInt(m[1] ?? '', 10) * 1000;
     if (!Number.isNaN(n) && n >= MIN_PLAUSIBLE_RATE && n <= MAX_PLAUSIBLE_RATE) found.push(n);
   }
+
+  // Spoken replies arrive as words: "fifteen thousand", "twenty five thousand only".
+  found.push(...findSpokenRateCandidates(text));
 
   return Array.from(new Set(found));
 }

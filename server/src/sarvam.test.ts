@@ -6,18 +6,22 @@ import type { SarvamConfig } from './config';
 import {
   applySarvamCallResult,
   enquiryScript,
+  fetchSarvamAttemptResult,
   generateEnquiryScript,
   isAllowedSarvamNumber,
   normaliseIndianPhone,
   parseSarvamWebhook,
   placeSarvamCall,
+  sarvamAgentVariables,
   sarvamOutboundPayload,
+  syncSarvamCall,
 } from './sarvam';
 import { newStore } from './store';
 
 function cfg(overrides: Partial<SarvamConfig> = {}): SarvamConfig {
   return {
     apiKey: 'sarvam-key',
+    voiceApiKey: 'sarvam-voice-key',
     modelBaseUrl: 'https://api.sarvam.ai',
     model: 'sarvam-105b',
     orgId: 'org-1',
@@ -91,7 +95,7 @@ test('outbound payload targets the Sarvam outbounds API with the allowed number'
   const { url, init } = sarvamOutboundPayload('6385106931', cfg(), { requirementId: 'REQ-T1' });
   assert.equal(url, 'https://apps.sarvam.ai/api/outbounds/v1/orgs/org-1/workspaces/ws-1/outbounds');
   const headers = init.headers as Record<string, string>;
-  assert.equal(headers['X-API-Key'], 'sarvam-key');
+  assert.equal(headers['X-API-Key'], 'sarvam-voice-key');
   const body = JSON.parse(String(init.body)) as {
     app_config: { app_id: string; connection_config: { agent_phone_number: string } };
     user_config: { user_phone_number: string };
@@ -103,9 +107,23 @@ test('outbound payload targets the Sarvam outbounds API with the allowed number'
   assert.equal(body.webhook_config.metadata.requirementId, 'REQ-T1');
 });
 
+test('outbound payload carries the requirement values the agent speaks', () => {
+  const { init } = sarvamOutboundPayload('6385106931', cfg(), { requirementId: 'REQ-T1' }, sarvamAgentVariables(requirement()));
+  const body = JSON.parse(String(init.body)) as {
+    app_config: { agent_variables: Record<string, string> };
+  };
+  assert.equal(body.app_config.agent_variables.origin, 'Ambattur');
+  assert.equal(body.app_config.agent_variables.destination, 'Bengaluru');
+  assert.ok((body.app_config.agent_variables.weight_tonnes ?? '').length > 0);
+  assert.ok((body.app_config.agent_variables.question ?? '').includes('rate'));
+});
+
 test('outbound payload refuses any other number', () => {
   assert.throws(() => sarvamOutboundPayload('+91 98400 11223', cfg()), /may only call David Transportation/);
-  assert.throws(() => sarvamOutboundPayload('6385106931', cfg({ apiKey: null })), /not configured/);
+  assert.throws(
+    () => sarvamOutboundPayload('6385106931', cfg({ apiKey: null, voiceApiKey: null })),
+    /not configured/,
+  );
 });
 
 test('placeSarvamCall returns the attempt id and surfaces provider errors', async () => {
@@ -240,4 +258,85 @@ test('a call that does not connect records the result without a quote', () => {
   assert.equal(store.quotes.length, 0);
   assert.equal(store.calls[0]?.status, 'no_answer');
   assert.ok(store.calls[0]?.completedAt);
+});
+
+function analyticsFetch(): FetchLike {
+  return async (url) => {
+    const target = String(url);
+    if (target.includes('/attempts')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            items: [
+              {
+                attempt_id: 'att-1',
+                interaction_id: '20261105/int-1',
+                connectivity_status: 'connected',
+                failure_reason: 'NO_FAILURE_REASON',
+                duration_in_seconds: 119.9,
+              },
+            ],
+          }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          items: [
+            {
+              interaction_id: '20261105/int-1',
+              translate_transcript: [
+                { role: 'agent', text: 'What rate will you give?' },
+                { role: 'user', text: 'Fifteen thousand, toll is included.' },
+              ],
+            },
+          ],
+        }),
+    };
+  };
+}
+
+test('pulls a finished attempt and its English transcript from analytics', async () => {
+  const result = await fetchSarvamAttemptResult('att-1', cfg(), analyticsFetch());
+  assert.ok(result);
+  assert.equal(result?.status, 'connected');
+  assert.equal(result?.durationSec, 119.9);
+  assert.equal(result?.interactionId, '20261105/int-1');
+  assert.equal(result?.failureReason, null);
+  assert.equal(result?.turns.length, 2);
+  assert.equal(result?.turns[1]?.en_text, 'Fifteen thousand, toll is included.');
+});
+
+test('syncing a queued call turns the spoken rate into a quote', async () => {
+  const store = newStore();
+  store.requirements.push(requirement());
+  store.calls.push(call());
+
+  const outcome = await syncSarvamCall(store, 'SC-1', cfg(), analyticsFetch());
+
+  assert.equal(outcome.ok, true);
+  assert.equal(store.calls[0]?.status, 'connected');
+  assert.equal(store.calls[0]?.durationSec, 119.9);
+  assert.equal(store.quotes.length, 1);
+  assert.equal(store.quotes[0]?.rate, 15000);
+  assert.equal(store.quotes[0]?.tollIncluded, true);
+  assert.equal(store.requirements[0]?.status, 'quoted');
+});
+
+test('the opening line override carries the load details', () => {
+  const req = requirement();
+  const opening = enquiryScript(req, 'David Transportation');
+  const { init } = sarvamOutboundPayload('6385106931', cfg(), {}, sarvamAgentVariables(req), opening);
+  const body = JSON.parse(String(init.body)) as { app_config: { app_overrides?: { initial_bot_message?: string } } };
+  const message = body.app_config.app_overrides?.initial_bot_message ?? '';
+  assert.ok(message.includes(req.origin), message);
+  assert.ok(message.includes(req.destination), message);
+  assert.ok(message.includes(`${req.weightT} tonnes`), message);
+  assert.ok(message.includes(req.cargo), message);
+  assert.ok(message.includes(req.loadingDate), message);
+  assert.ok(message.includes(req.loadingTime), message);
 });

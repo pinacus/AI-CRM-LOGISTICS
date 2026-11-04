@@ -159,8 +159,7 @@ function maxCapacityFor(bodySizes: number[]): number {
 function buildVendors(): Vendor[] {
   const vendors = VENDOR_NAMES.map((name, i): Vendor => {
     const demoFleet = i < 12;
-    const phone =
-      name === "SFS Cargo Movers" ? "+91 63851 06931" : phoneFor(name);
+    const phone = phoneFor(name);
 
     if (demoFleet) {
       return {
@@ -209,11 +208,7 @@ if (unit(`${name}|pharma`) < 0.25) cargoTypes.push('Pharma');
       name,
       phone,
       whatsapp:
-        name === "SFS Cargo Movers"
-          ? phone
-          : unit(`${name}|wa`) < 0.85
-            ? phone
-            : phoneFor(`${name}|wa`),
+        unit(`${name}|wa`) < 0.85 ? phone : phoneFor(`${name}|wa`),
       origins: Array.from(
         new Set([
           ORIGINS[(i - 12) % ORIGINS.length] ?? "Ambattur",
@@ -289,12 +284,13 @@ export function sarvamVendor(id: number): Vendor {
   return vendor;
 }
 
+/**
+ * Finds the Sarvam call target. The name wins over the number: another vendor
+ * may legitimately hold the same phone, and that must never redirect the call.
+ */
 export function findSarvamVendor(store: Store): Vendor | undefined {
-  const key = phoneKey(config.sarvam.vendorPhone);
-  return (
-    store.vendors.find((v) => phoneKey(v.phone) === key || phoneKey(v.whatsapp) === key) ??
-    store.vendors.find((v) => v.name.toLowerCase() === config.sarvam.vendorName.toLowerCase())
-  );
+  const name = config.sarvam.vendorName.toLowerCase();
+  return store.vendors.find((v) => v.name.toLowerCase() === name);
 }
 
 /**
@@ -723,7 +719,7 @@ export function seedStore(store: Store): void {
     replyCount: 5,
     startedOffsetMs: -20 * MIN,
     replies: [
-{ vendorName: 'Metro Freight Movers', channel: 'voice', rate: 37800, raw: '37,800 podhum sir, toll included, vehicle ready tomorrow 8 am' },
+{ vendorName: 'Metro Freight Movers', channel: 'voice', rate: 37800, raw: '37,800 sir, toll included, vehicle ready tomorrow 8 am' },
       { vendorName: 'Anand Cargo Carriers', channel: 'whatsapp', rate: 38500, raw: 'Rs. 38,500 all inclusive, vehicle ready tomorrow' },
       { vendorName: 'Kaveri Transports', channel: 'whatsapp', rate: 39500, raw: '39500 rupees, toll included, loading ok' },
       { vendorName: 'Sri Balaji Roadlines', channel: 'voice', rate: 41000, raw: '41000 sir, all inclusive, vehicle ready' },

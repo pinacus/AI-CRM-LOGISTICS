@@ -61,8 +61,13 @@ export interface TwilioWhatsappConfig {
 }
 
 export interface SarvamConfig {
-  /** Model API key (Sent as api-subscription-key and X-API-Key) */
+  /** Model API key, sent as api-subscription-key to api.sarvam.ai */
   apiKey: string | null;
+  /**
+   * Workspace API key for apps.sarvam.ai, sent as X-API-Key on instant outbound
+   * calls. This is a different credential from the model API key.
+   */
+  voiceApiKey: string | null;
   modelBaseUrl: string;
   model: string;
   /** Sarvam Voice Agents ids, copied from the dashboard URL */
@@ -129,6 +134,7 @@ export function loadConfig(): AppConfig {
         : null,
     sarvam: {
       apiKey: env("SARVAM_API_KEY") ?? null,
+      voiceApiKey: env("SARVAM_VOICE_API_KEY") ?? null,
       modelBaseUrl: env("SARVAM_MODEL_BASE_URL") ?? "https://api.sarvam.ai",
       model: env("SARVAM_MODEL") ?? "sarvam-105b",
       orgId: env("SARVAM_ORG_ID") ?? null,

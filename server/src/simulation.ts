@@ -99,28 +99,36 @@ function voiceScript(req: Requirement): string {
 }
 
 const VOICE_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-`${rate} podhum sir, ${tollExtra ? 'toll extra' : 'toll included'}`,
-  `Vanakkam sir, ${rate} rupees for this trip, vehicle ready`,
+  `${rate} rupees sir, ${tollExtra ? 'toll extra' : 'toll included'}`,
   `Hello sir, ${rate} rupees for this trip, vehicle ready`,
-  `${rate} sir, ${tollExtra ? 'toll extra' : 'all inclusive'}, loading fine`,
+  `Rate ${rate} rupees, ${tollExtra ? 'toll extra' : 'all inclusive'}, loading fine`,
   `Rate ${rate} rupees, detention charges extra`,
 ];
 
 const WHATSAPP_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-`Rs. ${rate.toLocaleString('en-IN')}, ${tollExtra ? 'toll extra' : 'all inclusive'}. Vehicle ready.`,
-  `${rate} ${tollExtra ? 'toll extra' : 'podhum, toll included'}`,
+  `Rs. ${rate.toLocaleString('en-IN')}, ${tollExtra ? 'toll extra' : 'all inclusive'}. Vehicle ready.`,
+  `Rs. ${rate}, ${tollExtra ? 'toll extra' : 'toll included'}`,
   `Best rate ${rate} rupees, loading ok`,
-  `ithu ${rate}, ${tollExtra ? 'toll extra' : 'toll included'}, vehicle ready`,
-  `இந்த ட்ரிப்புக்கு ${rate} ரூபாய், வண்டி ரெடி`,
+  `Rate ${rate} rupees, ${tollExtra ? 'toll extra' : 'toll included'}, vehicle ready`,
+  `Rs. ${rate} for this trip, vehicle ready to load`,
 ];
 
 const NO_RATE_REPLIES = [
-  'Call pannunga sir, rate solren',
-  'Vehicle ready, rate evening la solluren',
-  'நாளைக்கு பேசலாம், ரெடி இருக்கு',
-  'Call me sir, I will share the rate shortly',
+  'Please call me sir, I will share the rate shortly',
+  'Vehicle is ready, I will confirm the rate this evening',
   'Let us talk tomorrow, the vehicle is ready',
 ];
+
+/**
+ * The Sarvam AI call target is dialled only from the "Sarvam AI price enquiry"
+ * panel, so simulated outreach never produces a mock reply for it.
+ */
+function isSarvamVendor(vendor: Vendor): boolean {
+  return (
+    phoneKey(vendor.phone) === phoneKey(config.sarvam.vendorPhone) ||
+    vendor.name.toLowerCase() === config.sarvam.vendorName.toLowerCase()
+  );
+}
 
 export interface OutreachOutcome {
   attemptCount: number;
@@ -145,8 +153,12 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
   const base = req.rateCardRate ?? 34000;
   const shortlist = match.matched;
 
+  let dialled = 0;
   shortlist.forEach((m, index) => {
     const vendor = m.vendor;
+    // Handled by the Sarvam AI call panel instead of a simulated attempt.
+    if (isSarvamVendor(vendor)) return;
+    dialled += 1;
     const preferred: Channel =
       vendor.preferredChannel === "both"
         ? rng() < 0.5
@@ -203,16 +215,6 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
         }
       });
       void deliverLive(store, reqId, attemptId, channel, vendor, outbound);
-      return;
-    }
-
-    const isSarvamVendor =
-      phoneKey(vendor.phone) === phoneKey(config.sarvam.vendorPhone) ||
-      vendor.name.toLowerCase() === config.sarvam.vendorName.toLowerCase();
-
-    if (isSarvamVendor) {
-      // David Transportation is handled exclusively by Sarvam AI voice call and WhatsApp.
-      // Do not generate simulated mock replies for David.
       return;
     }
 
@@ -284,15 +286,21 @@ export function startOutreach(store: Store, reqId: string): OutreachOutcome {
     });
   });
 
+  if (dialled === 0) {
+    throw new Error(
+      `${config.sarvam.vendorName} is the only shortlisted vendor and is dialled by the Sarvam outbound call. Shortlist another vendor to run simulated outreach.`,
+    );
+  }
+
   req.status = "outreach";
 
-  const totalMs = 300 + shortlist.length * 300 + 3500 + 1000;
+  const totalMs = 300 + dialled * 300 + 3500 + 1000;
   schedule(reqId, totalMs, () => {
     const current = getRequirement(store, reqId);
     if (current && current.status === "outreach") current.status = "quoted";
   });
 
-  return { attemptCount: shortlist.length };
+  return { attemptCount: dialled };
 }
 
 /**

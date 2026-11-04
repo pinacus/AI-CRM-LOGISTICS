@@ -23,10 +23,16 @@ import { getRequirement, type Store } from './store';
 
 const MODEL_BASE_URL = 'https://api.sarvam.ai';
 const OUTBOUND_BASE_URL = 'https://apps.sarvam.ai/api/outbounds';
+const ANALYTICS_BASE_URL = 'https://apps.sarvam.ai/api/analytics';
+
+/** The workspace key that apps.sarvam.ai accepts as X-API-Key. */
+export function sarvamVoiceKey(cfg: SarvamConfig = config.sarvam): string | null {
+  return cfg.voiceApiKey ?? cfg.apiKey ?? null;
+}
 
 export function sarvamConfigured(cfg: SarvamConfig = config.sarvam): boolean {
   return Boolean(
-    cfg.apiKey && cfg.orgId && cfg.workspaceId && cfg.appId && cfg.connectionId && cfg.agentPhoneNumber,
+    sarvamVoiceKey(cfg) && cfg.orgId && cfg.workspaceId && cfg.appId && cfg.connectionId && cfg.agentPhoneNumber,
   );
 }
 
@@ -49,6 +55,8 @@ export function sarvamOutboundPayload(
   to: string,
   cfg: SarvamConfig,
   metadata: Record<string, string> = {},
+  variables: Record<string, string> = {},
+  opening?: string,
 ): { url: string; init: RequestInit } {
   if (!sarvamConfigured(cfg)) throw new Error('Sarvam AI voice credentials are not configured');
   if (!isAllowedSarvamNumber(to, cfg)) {
@@ -63,6 +71,8 @@ export function sarvamOutboundPayload(
         connection_id: cfg.connectionId,
         agent_phone_number: normaliseIndianPhone(cfg.agentPhoneNumber ?? ''),
       },
+      ...(Object.keys(variables).length > 0 ? { agent_variables: variables } : {}),
+      ...(opening ? { app_overrides: { initial_bot_message: opening } } : {}),
     },
     user_config: { user_phone_number: normaliseIndianPhone(to) },
     ...(cfg.webhookUrl ? { webhook_config: { url: cfg.webhookUrl, metadata } } : {}),
@@ -74,7 +84,7 @@ export function sarvamOutboundPayload(
     )}/outbounds`,
     init: {
       method: 'POST',
-      headers: { 'X-API-Key': cfg.apiKey ?? '', 'Content-Type': 'application/json' },
+      headers: { 'X-API-Key': sarvamVoiceKey(cfg) ?? '', 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     },
   };
@@ -92,13 +102,24 @@ export async function placeSarvamCall(
   cfg: SarvamConfig = config.sarvam,
   metadata: Record<string, string> = {},
   fetchImpl: FetchLike = fetch,
+  variables: Record<string, string> = {},
+  opening?: string,
 ): Promise<SarvamCallPlacement> {
   try {
-    const { url, init } = sarvamOutboundPayload(to, cfg, metadata);
+    const { url, init } = sarvamOutboundPayload(to, cfg, metadata, variables, opening);
     const res = await fetchImpl(url, init);
     const body = await res.text();
     if (!res.ok) {
-      return { ok: false, provider: 'sarvam', detail: `Sarvam ${res.status}: ${body.slice(0, 200)}`, attemptId: null };
+      const hint =
+        res.status === 401 || res.status === 403
+          ? ' The workspace key is rejected: SARVAM_VOICE_API_KEY must be the workspace API key from the Sarvam Voice Agents dashboard, not the model API key.'
+          : '';
+      return {
+        ok: false,
+        provider: 'sarvam',
+        detail: `Sarvam ${res.status}: ${body.slice(0, 200)}${hint}`,
+        attemptId: null,
+      };
     }
     let attemptId: string | null = null;
     try {
@@ -116,6 +137,24 @@ export async function placeSarvamCall(
       attemptId: null,
     };
   }
+}
+
+/**
+ * Values the Sarvam agent speaks. Without these the agent narrates its template
+ * placeholders ("from origin to destination") instead of the real lane.
+ */
+export function sarvamAgentVariables(req: Requirement): Record<string, string> {
+  return {
+    origin: req.origin,
+    destination: req.destination,
+    weight_tonnes: String(req.weightT),
+    vehicle_type: VEHICLE_TYPE_LABEL[req.vehicleType] ?? req.vehicleType,
+    body_size_ft: String(req.bodySizeFt),
+    axle: req.axle,
+    loading_date: req.loadingDate,
+    loading_time: req.loadingTime,
+    question: 'What is your best all-inclusive rate in rupees for this trip?',
+  };
 }
 
 /** Deterministic enquiry script used when the Sarvam model is unreachable. */
@@ -283,7 +322,28 @@ export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): 
   const requirement = getRequirement(store, call.requirementId);
   if (!requirement) return { ok: true, detail: `call ${call.id} has no requirement`, callId: call.id };
   if (call.quoteId) {
-    return { ok: true, detail: `call ${call.id} already produced ${call.quoteId}`, callId: call.id, quoteId: call.quoteId };
+    // A re-delivered transcript repairs a quote whose rate could not be read the
+    // first time (for example a spoken reply that needed the number-word parser).
+    const existing = store.quotes.find((q) => q.id === call.quoteId);
+    if (!existing || existing.rate !== null) {
+      return { ok: true, detail: `call ${call.id} already produced ${call.quoteId}`, callId: call.id, quoteId: call.quoteId };
+    }
+    const again = parseQuoteReply(event.userText, requirement.rateCardRate);
+    if (again.rate === null) {
+      return { ok: true, detail: `call ${call.id} already produced ${call.quoteId}`, callId: call.id, quoteId: call.quoteId };
+    }
+    const repaired = withNormalisation({
+      ...existing,
+      rate: again.rate,
+      tollIncluded: again.tollIncluded,
+      availableOnDate: again.availableOnDate,
+      conditions: again.conditions,
+      confidence: again.confidence,
+      rawText: event.userText,
+    });
+    repaired.flagReason = flagReason(repaired.rate, repaired.confidence, requirement.rateCardRate);
+    Object.assign(existing, repaired);
+    return { ok: true, detail: `re-parsed ${existing.id} from ${call.vendorName}`, callId: call.id, quoteId: existing.id };
   }
 
   const parsed = parseQuoteReply(event.userText, requirement.rateCardRate);
@@ -309,10 +369,145 @@ export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): 
   quote.flagReason = flagReason(quote.rate, quote.confidence, requirement.rateCardRate);
   store.quotes.push(quote);
   call.quoteId = quote.id;
+
+  const attempt = store.attempts.find((a) => a.requirementId === requirement.id && a.vendorId === call.vendorId);
+  if (attempt) {
+    attempt.status = 'replied';
+    attempt.reply = event.userText;
+    attempt.repliedAt = new Date().toISOString();
+  }
+
   if (requirement.status === 'intake' || requirement.status === 'shortlisted' || requirement.status === 'outreach') {
     requirement.status = 'quoted';
   }
   return { ok: true, detail: `parsed ${quote.id} from ${call.vendorName}`, callId: call.id, quoteId: quote.id };
+}
+
+/* -------------------------------------------------------------- pull result */
+
+/** ISO 8601 stamp with an explicit IST offset, which the analytics API requires. */
+function istStamp(ms: number): string {
+  const shifted = new Date(ms + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  return `${shifted}+05:30`;
+}
+
+function analyticsScope(cfg: SarvamConfig): { base: string; key: string } | null {
+  const key = sarvamVoiceKey(cfg);
+  if (!key || !cfg.orgId || !cfg.workspaceId || !cfg.appId) return null;
+  return {
+    base: `${ANALYTICS_BASE_URL}/v1/${encodeURIComponent(cfg.orgId)}/${encodeURIComponent(cfg.workspaceId)}/${encodeURIComponent(cfg.appId)}`,
+    key,
+  };
+}
+
+interface AnalyticsAttempt {
+  attempt_id?: unknown;
+  interaction_id?: unknown;
+  connectivity_status?: unknown;
+  failure_reason?: unknown;
+  duration_in_seconds?: unknown;
+}
+
+interface AnalyticsInteraction {
+  interaction_id?: unknown;
+  translate_transcript?: { role?: unknown; text?: unknown }[];
+}
+
+async function analyticsGet(
+  url: string,
+  key: string,
+  fetchImpl: FetchLike,
+): Promise<Record<string, unknown> | null> {
+  const res = await fetchImpl(url, { headers: { 'X-API-Key': key } });
+  if (!res.ok) return null;
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text) as Record<string, unknown>;
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads an attempt from the Sarvam analytics API. The instant-outbound call only
+ * ever returns an attempt id, so this is how a result can be collected when no
+ * public webhook URL is available.
+ */
+export async function fetchSarvamAttemptResult(
+  attemptId: string,
+  cfg: SarvamConfig = config.sarvam,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ status: SarvamCallStatus; durationSec: number | null; interactionId: string | null; failureReason: string | null; turns: { role: string; en_text: string }[] } | null> {
+  const scope = analyticsScope(cfg);
+  if (!scope || !attemptId) return null;
+
+  const now = Date.now();
+  const params = new URLSearchParams({
+    start_datetime: istStamp(now - 3 * 24 * 60 * 60 * 1000),
+    end_datetime: istStamp(now + 24 * 60 * 60 * 1000),
+    limit: '50',
+    filter_conditions: JSON.stringify([{ field: 'attempt_id', operator: 'equals', value: attemptId }]),
+  });
+  const attempts = await analyticsGet(`${scope.base}/attempts?${params.toString()}`, scope.key, fetchImpl);
+  const items = Array.isArray(attempts?.items) ? (attempts?.items as AnalyticsAttempt[]) : [];
+  const attempt = items.find((item) => item.attempt_id === attemptId);
+  if (!attempt) return null;
+
+  const rawStatus = String(attempt.connectivity_status ?? '');
+  const status: SarvamCallStatus = STATUSES.includes(rawStatus as SarvamCallStatus)
+    ? (rawStatus as SarvamCallStatus)
+    : 'queued';
+  const interactionId = typeof attempt.interaction_id === 'string' ? attempt.interaction_id : null;
+  const failure = typeof attempt.failure_reason === 'string' && attempt.failure_reason !== 'NO_FAILURE_REASON' ? attempt.failure_reason : null;
+  const durationSec = typeof attempt.duration_in_seconds === 'number' ? attempt.duration_in_seconds : null;
+
+  let turns: { role: string; en_text: string }[] = [];
+  if (status === 'connected' && interactionId) {
+    const iParams = new URLSearchParams({
+      start_datetime: istStamp(now - 3 * 24 * 60 * 60 * 1000),
+      end_datetime: istStamp(now + 24 * 60 * 60 * 1000),
+      include_transcript: 'true',
+      limit: '20',
+    });
+    const list = await analyticsGet(`${scope.base}/interactions?${iParams.toString()}`, scope.key, fetchImpl);
+    const rows = Array.isArray(list?.items) ? (list?.items as AnalyticsInteraction[]) : [];
+    const interaction = rows.find((row) => row.interaction_id === interactionId);
+    turns = (interaction?.translate_transcript ?? [])
+      .map((turn) => ({ role: String(turn.role ?? ''), en_text: String(turn.text ?? '').trim() }))
+      .filter((turn) => turn.en_text.length > 0);
+  }
+
+  return { status, durationSec, interactionId, failureReason: failure, turns };
+}
+
+/** Polls Sarvam for one queued call and applies the result like a webhook would. */
+export async function syncSarvamCall(
+  store: Store,
+  callId: string,
+  cfg: SarvamConfig = config.sarvam,
+  fetchImpl: FetchLike = fetch,
+): Promise<SarvamOutcome> {
+  const call = store.calls.find((c) => c.id === callId);
+  if (!call) return { ok: false, detail: `Call ${callId} not found` };
+  if (!call.attemptId) return { ok: false, detail: `Call ${callId} was never accepted by Sarvam`, callId: call.id };
+
+  const result = await fetchSarvamAttemptResult(call.attemptId, cfg, fetchImpl);
+  if (!result) return { ok: true, detail: `Sarvam has no result for ${call.attemptId} yet`, callId: call.id };
+  if (result.status === 'queued') {
+    return { ok: true, detail: `Sarvam is still working on ${call.attemptId}`, callId: call.id };
+  }
+
+  const event = parseSarvamWebhook({
+    attempt_id: call.attemptId,
+    status: result.status,
+    duration: result.durationSec,
+    interaction_id: result.interactionId,
+    failure_reason: result.failureReason,
+    interaction_transcript: result.turns,
+  });
+  if (!event) return { ok: false, detail: 'Sarvam returned an unreadable result', callId: call.id };
+  return applySarvamCallResult(store, event);
 }
 
 export interface SarvamStatus {

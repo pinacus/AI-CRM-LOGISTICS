@@ -30,10 +30,13 @@ import { applyRateCard, ensureSarvamVendor } from './seed';
 import { applyInboundReply, startLockIn, startOutreach } from './simulation';
 import {
   applySarvamCallResult,
+  enquiryScript,
   generateEnquiryScript,
   parseSarvamWebhook,
   placeSarvamCall,
+  sarvamAgentVariables,
   sarvamStatus,
+  syncSarvamCall,
 } from './sarvam';
 import {
   attemptsFor,
@@ -421,6 +424,70 @@ export function createApiRouter(ctx: ServerContext): Router {
     }),
   );
 
+  async function executeSarvamCall(reqId: string, actingReq?: Request) {
+    const requirement = getRequirement(store, reqId);
+    if (!requirement) return null;
+    const status = sarvamStatus();
+    if (!status.configured) return null;
+
+    const { vendor, added } = ensureSarvamVendor(store);
+    const generated = await generateEnquiryScript(requirement, vendor.name);
+    store.counters.sarvamCall += 1;
+    const call: SarvamCall = {
+      id: `SC-${store.counters.sarvamCall}`,
+      attemptId: null,
+      requirementId: reqId,
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      phone: vendor.phone,
+      script: generated.script,
+      status: 'queued',
+      interactionId: null,
+      durationSec: null,
+      failureReason: null,
+      transcript: null,
+      quoteId: null,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    };
+    store.calls.push(call);
+
+    const placed = await placeSarvamCall(
+      vendor.phone,
+      config.sarvam,
+      {
+        requirementId: reqId,
+        callId: call.id,
+        vendor: vendor.name,
+      },
+      fetch,
+      sarvamAgentVariables(requirement),
+      // The agent's own prompt opens with generic words, so override the first
+      // spoken line with the real lane, weight, cargo and loading slot.
+      enquiryScript(requirement, vendor.name),
+    );
+
+    if (!placed.ok) {
+      call.status = 'failed';
+      call.failureReason = placed.detail;
+      call.completedAt = new Date().toISOString();
+      if (actingReq) audit(actingReq, 'sarvam.call_failed', 'requirement', reqId, placed.detail);
+      return { ok: false, call, detail: placed.detail, vendor, added, generated };
+    }
+
+    call.attemptId = placed.attemptId;
+    if (actingReq) {
+      audit(
+        actingReq,
+        'sarvam.call',
+        'requirement',
+        reqId,
+        `${vendor.name} ${vendor.phone}, attempt ${placed.attemptId ?? 'pending'}`,
+      );
+    }
+    return { ok: true, call, vendor, added, generated };
+  }
+
   router.post(
     '/requirements/:id/outreach',
     wrap((req, res) => {
@@ -429,6 +496,12 @@ export function createApiRouter(ctx: ServerContext): Router {
       if (!requirement) return notFound(res, 'Requirement');
       const outcome = startOutreach(store, id);
       audit(req, 'outreach.start', 'requirement', id, `${outcome.attemptCount} vendors contacted`);
+
+      // Trigger real Sarvam AI call to David Transportation immediately on Start AI Outreach!
+      if (sarvamStatus().configured) {
+        void executeSarvamCall(id, req);
+      }
+
       res.json({ ...requirementDetail(store, id), started: outcome.attemptCount });
     }),
   );
@@ -451,57 +524,46 @@ export function createApiRouter(ctx: ServerContext): Router {
       return;
     }
 
-    const { vendor, added } = ensureSarvamVendor(store);
-
     void (async () => {
       try {
-        const generated = await generateEnquiryScript(requirement, vendor.name);
-        store.counters.sarvamCall += 1;
-        const call: SarvamCall = {
-          id: `SC-${store.counters.sarvamCall}`,
-          attemptId: null,
-          requirementId: id,
-          vendorId: vendor.id,
-          vendorName: vendor.name,
-          phone: vendor.phone,
-          script: generated.script,
-          status: 'queued',
-          interactionId: null,
-          durationSec: null,
-          failureReason: null,
-          transcript: null,
-          quoteId: null,
-          createdAt: new Date().toISOString(),
-          completedAt: null,
-        };
-        store.calls.push(call);
-
-        const placed = await placeSarvamCall(vendor.phone, config.sarvam, {
-          requirementId: id,
-          callId: call.id,
-          vendor: vendor.name,
-        });
-
-        if (!placed.ok) {
-          call.status = 'failed';
-          call.failureReason = placed.detail;
-          call.completedAt = new Date().toISOString();
-          audit(req, 'sarvam.call_failed', 'requirement', id, placed.detail);
-          res.status(502).json({ error: placed.detail, call });
+        const result = await executeSarvamCall(id, req);
+        if (!result) {
+          res.status(400).json({ error: 'Could not place Sarvam call' });
           return;
         }
-
-        call.attemptId = placed.attemptId;
-        audit(req, 'sarvam.call', 'requirement', id, `${vendor.name} ${vendor.phone}, attempt ${placed.attemptId ?? 'pending'}`);
+        if (!result.ok) {
+          res.status(502).json({ error: result.detail, call: result.call });
+          return;
+        }
         res.json({
           ok: true,
-          call,
-          vendor: { id: vendor.id, name: vendor.name, phone: vendor.phone },
-          vendorAdded: added,
-          scriptSource: generated.source,
+          call: result.call,
+          vendor: { id: result.vendor.id, name: result.vendor.name, phone: result.vendor.phone },
+          vendorAdded: result.added,
+          scriptSource: result.generated.source,
         });
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Could not place the Sarvam call' });
+      }
+    })();
+  });
+
+  /**
+   * Pulls the result of a placed Sarvam call from the analytics API. Used when no
+   * public webhook URL is configured, so a finished call still becomes a quote.
+   */
+  router.post('/sarvam-calls/:id/sync', (req, res) => {
+    const callId = String(req.params.id);
+    void (async () => {
+      try {
+        const outcome = await syncSarvamCall(store, callId);
+        if (!outcome.ok) {
+          res.status(502).json({ error: outcome.detail, callId: outcome.callId });
+          return;
+        }
+        res.json(outcome);
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Could not sync the Sarvam call' });
       }
     })();
   });

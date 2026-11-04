@@ -27,7 +27,7 @@ Freight brokerage runs on manual phone calls, scattered WhatsApp quotes, and spr
 | 🎯 **Vendor Matching** | Scores vendors on route, service type, lane coverage, compliance and commercial fit |
 | 📋 **Weighted Shortlisting** | Surfaces the most relevant vendors before outreach begins |
 | 🗣️ **Voice & WhatsApp Quoting** | AI-driven quote ingestion with confidence scoring and anomaly flags, including Tamil |
-| 📞 **Sarvam AI Calls** | Sarvam Voice Agents place the price enquiry call and the transcript becomes a quote |
+| 📞 **Sarvam AI Calls** | Sarvam Voice Agents place the enquiry call and the transcript becomes a quote |
 | 💰 **Margin-Aware Pricing** | Sales pricing with customer confirmation before booking |
 | ✅ **L1 Rate Validation** | Vendor acceptance flow feeding automated trip creation |
 | 🚚 **End-to-End Trip Execution** | Dispatch → proof of delivery → invoice → receipt → vendor payout |
@@ -73,22 +73,34 @@ Sessions are HttpOnly cookies with a configurable lifetime. Administrators can c
 ## 📁 Project Structure
 
 ```text
-shared/types.ts        Types shared by the API and the client
+shared/types.ts            Types shared by the API and the client
 
 server/src/
-├── index.ts            Boot: open database, hydrate or seed, listen, persist on shutdown
-├── routes.ts           REST API: auth, requirements, quotes, trips, payments, admin, webhooks
-├── auth.ts             Password hashing (scrypt), sessions, role middleware
-├── db.ts               SQLite layer: schema, hydrate, snapshot persist
-├── audit.ts            Append-only audit log
-├── channels.ts         Twilio voice adapter and channel mode selection
-├── whatsapp.ts         Twilio WhatsApp adapter, template, and webhook parsing
-├── simulation.ts       Outreach and lock-in timelines, inbound reply application
-├── seed.ts             Sample master data and demo requirements
-└── domain/             Matching engine, quote parser, L1 aggregation, rate card (unit tested)
+├── index.ts               Boot: open database, hydrate or seed, listen, persist on shutdown
+├── config.ts              Environment configuration, including the Sarvam AI settings
+├── routes.ts              REST API: auth, requirements, quotes, trips, payments, admin, webhooks
+├── auth.ts                Password hashing (scrypt), sessions, role middleware
+├── db.ts                  SQLite layer: schema, hydrate, snapshot persist
+├── store.ts               In-memory working set and typed lookups
+├── audit.ts               Append-only audit log
+├── metrics.ts             Dashboard metrics
+├── channels.ts            Twilio voice adapter and channel mode selection
+├── whatsapp.ts            Twilio WhatsApp adapter, template, and webhook parsing
+├── simulation.ts          Outreach and lock-in timelines, inbound reply application
+├── sarvam.ts              Sarvam AI: enquiry script, instant outbound call, call webhook
+├── seed.ts                Sample master data, demo requirements, Sarvam call target
+├── *.test.ts              Unit tests for auth, channels, database and the Sarvam integration
+└── domain/                Matching engine, quote parser, L1 aggregation, rate card (unit tested)
 
-web/src/                React client: landing, console screens, login, admin console
-scripts/smoke_test.py   End-to-end suite: auth, admin, webhooks, full business flow
+web/src/
+├── main.tsx, App.tsx      Entry point and routes
+├── api.ts, auth.tsx       Typed API client and session provider
+├── components/            Shared UI (panels, badges, icons, score bars)
+├── pages/                 Landing, login, console screens, admin console
+└── styles.css             Design system
+
+scripts/smoke_test.py      End-to-end suite: auth, admin, webhooks, full business flow
+scripts/start_api.ps1      Windows helper to start the API in the background
 ```
 
 ---
@@ -179,7 +191,8 @@ Calls are placed through Twilio reading the requirement script. A Twilio-formatt
 **Sarvam AI**
 
 ```env
-SARVAM_API_KEY=...
+SARVAM_API_KEY=...          # model API key, writes the script
+SARVAM_VOICE_API_KEY=...    # workspace API key, places the call
 SARVAM_ORG_ID=...
 SARVAM_WORKSPACE_ID=...
 SARVAM_APP_ID=...
@@ -187,9 +200,11 @@ SARVAM_CONNECTION_ID=...
 SARVAM_AGENT_PHONE_NUMBER=+91...
 ```
 
-With these set, the **Sarvam AI price enquiry** panel on a requirement places a real instant outbound call through Sarvam Voice Agents (the Sarvam chat model writes the spoken script, with a deterministic English fallback). The call record appears immediately and the transcript is posted to `POST /api/webhooks/sarvam`, which parses the vendor's spoken rate into a quote like any other channel.
+With these set, `POST /api/requirements/:id/sarvam-call` places a real instant outbound call through Sarvam Voice Agents (the Sarvam chat model writes the spoken script, with a deterministic English fallback). The call record appears immediately and the transcript is posted to `POST /api/webhooks/sarvam`, which parses the vendor's spoken rate into a quote like any other channel. If the app has no public webhook URL, `POST /api/sarvam-calls/:id/sync` pulls the finished attempt and its English transcript from Sarvam's analytics API and creates the same quote.
 
-Only one number is ever dialled: `SARVAM_VENDOR_PHONE` (default `6385106931`, David Transportation). That vendor is kept in the vendor master on boot, and the outbound payload builder refuses any other number, so the endpoint cannot be used as a dialler.
+Only one number is ever dialled: `SARVAM_VENDOR_PHONE` (default `6385106931`, David Transportation). That vendor is kept in the vendor master on boot (matched by name, never by a shared phone number), and the outbound payload builder refuses any other number, so the endpoint cannot be used as a dialler.
+
+`SARVAM_API_KEY` and `SARVAM_VOICE_API_KEY` are different credentials: the first is the model API subscription key, the second is the workspace key that `apps.sarvam.ai` accepts as `X-API-Key`. A missing or wrong workspace key fails the call with a 401 and a message saying so.
 
 > The payload builders, script fallback and webhook parser are unit tested; the call itself needs Sarvam credentials and has not been exercised against the live API from this machine.
 ---
