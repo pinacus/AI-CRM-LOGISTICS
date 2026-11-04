@@ -47,7 +47,6 @@ function vendor(overrides: Partial<Vendor> = {}): Vendor {
     onTimePct: 92,
     avgRateVsMarketPct: -2,
     avgResponseMins: 6,
-    language: 'both',
     preferredChannel: 'voice',
     paymentTermsDays: 30,
     kycDone: true,

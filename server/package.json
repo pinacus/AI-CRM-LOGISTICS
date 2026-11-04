@@ -7,7 +7,7 @@
     "start": "tsx src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/domain/matching.test.ts src/domain/parsing.test.ts src/domain/aggregation.test.ts src/domain/ratecard.test.ts src/db.test.ts src/auth.test.ts src/channels.test.ts"
+    "test": "tsx --test src/domain/matching.test.ts src/domain/parsing.test.ts src/domain/aggregation.test.ts src/domain/ratecard.test.ts src/db.test.ts src/auth.test.ts src/channels.test.ts src/sarvam.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

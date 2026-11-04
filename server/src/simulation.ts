@@ -92,31 +92,34 @@ function round100(n: number): number {
 
 function voiceScript(req: Requirement): string {
   return (
-    `Tamil greeting, company introduction, then the requirement: ${req.weightT} tonnes of ${req.cargo} from ` +
+    `Greeting and company introduction, then the requirement: ${req.weightT} tonnes of ${req.cargo} from ` +
     `${req.origin} to ${req.destination}, ${VEHICLE_TYPE_LABEL[req.vehicleType]} ${req.bodySizeFt} ft, loading ` +
     `${req.loadingDate} ${req.loadingTime}. Asked for the best rate and read the number back for confirmation.`
   );
 }
 
 const VOICE_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-  `${rate} podhum sir, ${tollExtra ? "toll extra" : "toll included"}`,
+`${rate} podhum sir, ${tollExtra ? 'toll extra' : 'toll included'}`,
   `Vanakkam sir, ${rate} rupees for this trip, vehicle ready`,
-  `${rate} sir, ${tollExtra ? "toll extra" : "all inclusive"}, loading fine`,
+  `Hello sir, ${rate} rupees for this trip, vehicle ready`,
+  `${rate} sir, ${tollExtra ? 'toll extra' : 'all inclusive'}, loading fine`,
   `Rate ${rate} rupees, detention charges extra`,
 ];
 
 const WHATSAPP_REPLIES = (rate: number, tollExtra: boolean): string[] => [
-  `Rs. ${rate.toLocaleString("en-IN")}, ${tollExtra ? "toll extra" : "all inclusive"}. Vehicle ready.`,
-  `${rate} ${tollExtra ? "toll extra" : "podhum, toll included"}`,
+`Rs. ${rate.toLocaleString('en-IN')}, ${tollExtra ? 'toll extra' : 'all inclusive'}. Vehicle ready.`,
+  `${rate} ${tollExtra ? 'toll extra' : 'podhum, toll included'}`,
   `Best rate ${rate} rupees, loading ok`,
-  `ithu ${rate}, ${tollExtra ? "toll extra" : "toll included"}, vehicle ready`,
+  `ithu ${rate}, ${tollExtra ? 'toll extra' : 'toll included'}, vehicle ready`,
   `இந்த ட்ரிப்புக்கு ${rate} ரூபாய், வண்டி ரெடி`,
 ];
 
 const NO_RATE_REPLIES = [
-  "Call pannunga sir, rate solren",
-  "Vehicle ready, rate evening la solluren",
-  "நாளைக்கு பேசலாம், ரெடி இருக்கு",
+  'Call pannunga sir, rate solren',
+  'Vehicle ready, rate evening la solluren',
+  'நாளைக்கு பேசலாம், ரெடி இருக்கு',
+  'Call me sir, I will share the rate shortly',
+  'Let us talk tomorrow, the vehicle is ready',
 ];
 
 export interface OutreachOutcome {

@@ -10,19 +10,15 @@ import type {
   TripStatus,
   VehicleType,
   Vendor,
-} from "../../shared/types";
-import { TRIP_STATUS_ORDER, VEHICLE_TYPE_LABEL } from "../../shared/types";
-import { whatsappMessage } from "./channels";
-import { withNormalisation } from "./domain/aggregation";
-import { matchVendors } from "./domain/matching";
-import { flagReason, parseQuoteReply } from "./domain/parsing";
-import {
-  buildRateCard,
-  DESTINATIONS,
-  lookupRate,
-  ORIGINS,
-} from "./domain/ratecard";
-import type { Store } from "./store";
+} from '../../shared/types';
+import { CARGO_TYPES, TRIP_STATUS_ORDER, VEHICLE_TYPE_LABEL } from '../../shared/types';
+import { phoneKey, whatsappMessage } from './channels';
+import { config } from './config';
+import { matchVendors } from './domain/matching';
+import { withNormalisation } from './domain/aggregation';
+import { buildRateCard, DESTINATIONS, lookupRate, ORIGINS } from './domain/ratecard';
+import { flagReason, parseQuoteReply } from './domain/parsing';
+import type { Store } from './store';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -161,7 +157,7 @@ function maxCapacityFor(bodySizes: number[]): number {
 }
 
 function buildVendors(): Vendor[] {
-  return VENDOR_NAMES.map((name, i) => {
+  const vendors = VENDOR_NAMES.map((name, i): Vendor => {
     const demoFleet = i < 12;
     const phone =
       name === "SFS Cargo Movers" ? "+91 63851 06931" : phoneFor(name);
@@ -192,8 +188,7 @@ function buildVendors(): Vendor[] {
         onTimePct: 84 + ((i * 5) % 13),
         avgRateVsMarketPct: (i % 8) - 4,
         avgResponseMins: 4 + ((i * 4) % 19),
-        language: i % 5 === 0 ? "tamil" : "both",
-        preferredChannel: i % 2 === 0 ? "voice" : "whatsapp",
+preferredChannel: i % 2 === 0 ? 'voice' : 'whatsapp',
         paymentTermsDays: i % 3 === 0 ? 45 : 30,
         kycDone: true,
         active: true,
@@ -204,10 +199,9 @@ function buildVendors(): Vendor[] {
     const bodySizes = pickN([14, 19, 22, 32, 40], bodyCount, `${name}|body`);
     const fleetSize = 4 + Math.floor(unit(`${name}|fleet`) * 37);
     const cargoTypes: CargoType[] = STAPLE_CARGO.slice();
-    if (unit(`${name}|pharma`) < 0.25) cargoTypes.push("Pharma");
-    if (unit(`${name}|odc`) < 0.25) cargoTypes.push("ODC");
-    if (unit(`${name}|chem`) < 0.25) cargoTypes.push("Chemicals");
-    const langRoll = unit(`${name}|lang`);
+if (unit(`${name}|pharma`) < 0.25) cargoTypes.push('Pharma');
+    if (unit(`${name}|odc`) < 0.25) cargoTypes.push('ODC');
+    if (unit(`${name}|chem`) < 0.25) cargoTypes.push('Chemicals');
     const channelRoll = unit(`${name}|chan`);
 
     return {
@@ -250,15 +244,75 @@ function buildVendors(): Vendor[] {
       onTimePct: 76 + Math.floor(unit(`${name}|ontime`) * 22),
       avgRateVsMarketPct: Math.round(-6 + unit(`${name}|mkt`) * 13),
       avgResponseMins: 2 + Math.floor(unit(`${name}|resp`) * 44),
-      language: langRoll < 0.5 ? "both" : langRoll < 0.85 ? "tamil" : "english",
-      preferredChannel:
-        channelRoll < 0.45 ? "voice" : channelRoll < 0.9 ? "whatsapp" : "both",
-      paymentTermsDays:
-        [15, 30, 45][Math.floor(unit(`${name}|terms`) * 3)] ?? 30,
+preferredChannel: channelRoll < 0.45 ? 'voice' : channelRoll < 0.9 ? 'whatsapp' : 'both',
+      paymentTermsDays: [15, 30, 45][Math.floor(unit(`${name}|terms`) * 3)] ?? 30,
       kycDone: unit(`${name}|kyc`) > 0.12,
       active: unit(`${name}|active`) > 0.08,
     };
   });
+  vendors.push(sarvamVendor(VENDOR_NAMES.length + 1));
+  return vendors;
+}
+
+/* ------------------------------------------------ Sarvam AI call target */
+
+/** Formats a 10 digit Indian mobile number for the vendor master. */
+export function displayIndianPhone(phone: string): string {
+  const digits = phone.replace(/[^0-9]/g, '').slice(-10);
+  return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : phone;
+}
+
+export function sarvamVendor(id: number): Vendor {
+  const vendor: Vendor = {
+    id,
+    name: config.sarvam.vendorName,
+    phone: displayIndianPhone(config.sarvam.vendorPhone),
+    whatsapp: displayIndianPhone(config.sarvam.vendorPhone),
+    origins: ORIGINS.slice(),
+    corridors: DESTINATIONS.slice(),
+    vehicleTypes: ['open_truck', 'container', 'trailer'],
+    bodySizes: [14, 19, 22, 32, 40],
+    axles: ['single', 'multi'],
+    maxCapacityT: 25,
+    cargoTypes: CARGO_TYPES.slice(),
+    fleetSize: 12,
+    availableVehicles: 4,
+    rating: 4.4,
+    onTimePct: 90,
+    avgRateVsMarketPct: -2,
+    avgResponseMins: 5,
+    preferredChannel: 'voice',
+    paymentTermsDays: 30,
+    kycDone: true,
+    active: true,
+  };
+  return vendor;
+}
+
+export function findSarvamVendor(store: Store): Vendor | undefined {
+  const key = phoneKey(config.sarvam.vendorPhone);
+  return (
+    store.vendors.find((v) => phoneKey(v.phone) === key || phoneKey(v.whatsapp) === key) ??
+    store.vendors.find((v) => v.name.toLowerCase() === config.sarvam.vendorName.toLowerCase())
+  );
+}
+
+/**
+ * Keeps the Sarvam AI call target in the vendor master: adds it when missing and
+ * corrects the number when the record exists with a different one.
+ */
+export function ensureSarvamVendor(store: Store): { vendor: Vendor; added: boolean } {
+  const phone = displayIndianPhone(config.sarvam.vendorPhone);
+  const existing = findSarvamVendor(store);
+  if (existing) {
+    if (phoneKey(existing.phone) !== phoneKey(phone)) existing.phone = phone;
+    if (phoneKey(existing.whatsapp) !== phoneKey(phone)) existing.whatsapp = phone;
+    return { vendor: existing, added: false };
+  }
+  const nextId = store.vendors.reduce((max, v) => Math.max(max, v.id), 0) + 1;
+  const vendor = sarvamVendor(nextId);
+  store.vendors.push(vendor);
+  return { vendor, added: true };
 }
 
 /* ------------------------------------------------------- requirement rows */
@@ -373,7 +427,7 @@ function addQuote(
 
 function voiceScript(req: Requirement): string {
   return (
-    `Greeting in Tamil, then: requirement is ${req.weightT} tonnes of ${req.cargo} from ${req.origin} to ${req.destination}, ` +
+    `Greeting, then: requirement is ${req.weightT} tonnes of ${req.cargo} from ${req.origin} to ${req.destination}, ` +
     `${VEHICLE_TYPE_LABEL[req.vehicleType]} ${req.bodySizeFt} ft, loading ${req.loadingDate} at ${req.loadingTime}. ` +
     `Asked: what is your best rate for this trip, and repeat the number back for confirmation.`
   );
@@ -669,36 +723,11 @@ export function seedStore(store: Store): void {
     replyCount: 5,
     startedOffsetMs: -20 * MIN,
     replies: [
-      {
-        vendorName: "Metro Freight Movers",
-        channel: "voice",
-        rate: 37800,
-        raw: "37,800 podhum sir, toll included, vehicle ready tomorrow 8 am",
-      },
-      {
-        vendorName: "Anand Cargo Carriers",
-        channel: "whatsapp",
-        rate: 38500,
-        raw: "Rs. 38,500 all inclusive, vehicle ready tomorrow",
-      },
-      {
-        vendorName: "Kaveri Transports",
-        channel: "whatsapp",
-        rate: 39500,
-        raw: "39500 rupees, toll included, loading ok",
-      },
-      {
-        vendorName: "Sri Balaji Roadlines",
-        channel: "voice",
-        rate: 41000,
-        raw: "41000 sir, all inclusive, vehicle ready",
-      },
-      {
-        vendorName: "Chettinad Carriers",
-        channel: "whatsapp",
-        rate: 42000,
-        raw: "Rs. 42,000, toll included",
-      },
+{ vendorName: 'Metro Freight Movers', channel: 'voice', rate: 37800, raw: '37,800 podhum sir, toll included, vehicle ready tomorrow 8 am' },
+      { vendorName: 'Anand Cargo Carriers', channel: 'whatsapp', rate: 38500, raw: 'Rs. 38,500 all inclusive, vehicle ready tomorrow' },
+      { vendorName: 'Kaveri Transports', channel: 'whatsapp', rate: 39500, raw: '39500 rupees, toll included, loading ok' },
+      { vendorName: 'Sri Balaji Roadlines', channel: 'voice', rate: 41000, raw: '41000 sir, all inclusive, vehicle ready' },
+      { vendorName: 'Chettinad Carriers', channel: 'whatsapp', rate: 42000, raw: 'Rs. 42,000, toll included' },
     ],
   });
 

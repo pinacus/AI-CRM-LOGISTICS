@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CONFIDENCE_THRESHOLD, flagReason, parseQuoteReply } from './parsing';
 
-test('parses a plain Tanglish voice reply', () => {
-  const parsed = parseQuoteReply('38500 podhum, toll extra');
+test('parses a plain English voice reply', () => {
+  const parsed = parseQuoteReply('38500, toll extra');
   assert.equal(parsed.rate, 38500);
   assert.equal(parsed.tollIncluded, false);
   assert.ok(parsed.conditions.includes('Toll extra'));
@@ -11,7 +11,7 @@ test('parses a plain Tanglish voice reply', () => {
 });
 
 test('parses shorthand rates like 41k', () => {
-  const parsed = parseQuoteReply('ithu 41k, toll extra');
+  const parsed = parseQuoteReply('rate 41k, toll extra');
   assert.equal(parsed.rate, 41000);
   assert.equal(parsed.tollIncluded, false);
 });
@@ -24,14 +24,8 @@ test('parses comma grouped rates with a currency marker', () => {
   assert.ok(parsed.confidence >= CONFIDENCE_THRESHOLD, `confidence ${parsed.confidence}`);
 });
 
-test('parses Tamil digits and Tamil currency words', () => {
-  const parsed = parseQuoteReply('௪௧,௦௦௦ ரூபாய், நாளைக்கு வண்டி ரெடி');
-  assert.equal(parsed.rate, 41000);
-  assert.equal(parsed.availableOnDate, true);
-});
-
 test('a reply without a number yields no rate and low confidence', () => {
-  const parsed = parseQuoteReply('Call pannunga sir, rate solren');
+  const parsed = parseQuoteReply('Call me back, rate will be sent later');
   assert.equal(parsed.rate, null);
   assert.ok(parsed.confidence < CONFIDENCE_THRESHOLD);
   assert.equal(flagReason(parsed.rate, parsed.confidence, null), 'No rate could be parsed from the reply');

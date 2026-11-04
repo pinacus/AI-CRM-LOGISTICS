@@ -12,6 +12,14 @@ import { Badge, EmptyState, Icon, Panel, RequirementStatusBadge, ScoreBar } from
 
 const CHANNEL_ICON = { voice: 'phone', message: 'message' } as const;
 
+const SARVAM_STATUS_LABEL: Record<string, string> = {
+  queued: 'Calling',
+  connected: 'Connected',
+  no_answer: 'No answer',
+  busy: 'Busy',
+  failed: 'Failed',
+};
+
 const NEXT_TRIP_LABEL: Record<string, string> = {
   vendor_confirmed: 'Capture vehicle assignment',
   vehicle_assigned: 'Mark dispatched',
@@ -131,7 +139,7 @@ export default function RequirementDetail() {
     );
   }
 
-  const { match, attempts, quotes, order, trip, invoice } = detail;
+  const { match, attempts, quotes, order, trip, invoice, sarvam, sarvamCalls } = detail;
 
   return (
     <>
@@ -388,7 +396,7 @@ export default function RequirementDetail() {
                   <Icon name={a.channel === 'voice' ? 'phone' : 'message'} size={15} />
                 </span>
                 <span className="who">{a.vendorName}</span>
-                <Badge tone="plain">{a.channel === 'voice' ? 'AI voice call' : 'Tamil WhatsApp'}</Badge>
+                <Badge tone="plain">{a.channel === 'voice' ? 'AI voice call' : 'WhatsApp'}</Badge>
                 <Badge
                   tone={
                     a.status === 'replied'
@@ -430,6 +438,96 @@ export default function RequirementDetail() {
                     <span className="muted">No reply inside the timeout. One reminder is logged, then the vendor is marked no response.</span>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </Panel>
+
+      <Panel
+        title="Sarvam AI price enquiry"
+        hint={`Instant outbound call from Sarvam Voice Agents, restricted to ${sarvam.vendorName} on ${sarvam.vendorPhone}`}
+        actions={
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={busy !== null || !sarvam.configured}
+            onClick={() => void action('sarvam', () => api.post(`/api/requirements/${id}/sarvam-call`))}
+          >
+            {busy === 'sarvam' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+            Call vendor for the rate
+          </button>
+        }
+        tight
+      >
+        {!sarvam.configured ? (
+          <div className="attempt">
+            <div className="error-banner">
+              Sarvam AI is not configured, so no call can be placed. Add the Sarvam credentials to{' '}
+              <code>.env</code> and restart the API.
+            </div>
+            <p className="small muted">
+              Required: <code>SARVAM_API_KEY</code>, <code>SARVAM_ORG_ID</code>, <code>SARVAM_WORKSPACE_ID</code>,{' '}
+              <code>SARVAM_APP_ID</code>, <code>SARVAM_CONNECTION_ID</code> and{' '}
+              <code>SARVAM_AGENT_PHONE_NUMBER</code>. The model used for the script is <code>{sarvam.model}</code>.
+            </p>
+          </div>
+        ) : sarvamCalls.length === 0 ? (
+          <EmptyState title="No Sarvam call yet">
+            The AI agent will call {sarvam.vendorName} on {sarvam.vendorPhone} and ask for the trip price, tolls and
+            vehicle availability. The spoken answer is parsed into a quote here.
+          </EmptyState>
+        ) : (
+          sarvamCalls.map((c) => (
+            <div className="attempt" key={c.id}>
+              <div className="attempt-head">
+                <span style={{ color: 'var(--muted)' }}>
+                  <Icon name="phone" size={15} />
+                </span>
+                <span className="who">{c.vendorName}</span>
+                <Badge
+                  tone={
+                    c.status === 'connected'
+                      ? 'success'
+                      : c.status === 'queued'
+                        ? 'info'
+                        : c.status === 'failed' || c.status === 'busy' || c.status === 'no_answer'
+                          ? 'warning'
+                          : 'neutral'
+                  }
+                >
+                  {SARVAM_STATUS_LABEL[c.status] ?? c.status}
+                </Badge>
+                <span className="time">
+                  called {formatTime(c.createdAt)}
+                  {c.durationSec !== null ? `, ${Math.round(c.durationSec)}s` : ''}
+                  {c.quoteId ? `, quote ${c.quoteId}` : ''}
+                </span>
+              </div>
+
+              <div className="transcript">
+                <div className="bubble out">
+                  <span className="who">Enquiry script</span>
+                  {c.script}
+                </div>
+                {c.transcript ? (
+                  <div className="bubble">
+                    <span className="who">Call transcript</span>
+                    <span style={{ whiteSpace: 'pre-line' }}>{c.transcript}</span>
+                  </div>
+                ) : c.failureReason ? (
+                  <div className="bubble">
+                    <span className="who">Call failed</span>
+                    {c.failureReason}
+                  </div>
+                ) : (
+                  <div className="bubble">
+                    <span className="who">Call result</span>
+                    <span className="muted">
+                      Waiting for Sarvam to post the transcript to <code>/api/webhooks/sarvam</code>.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ))

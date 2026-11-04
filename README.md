@@ -3,9 +3,7 @@
  🚛 FreightDesk
 
 ### Requirement to payment, automated end to end.
-
 An MVP for AI-driven CRM and logistics automation in freight brokerage — vendor matching, AI voice and Tamil WhatsApp quoting, L1 rate suggestion, vendor lock-in, trip tracking, billing and payment, all in one system.
-
 Built from the design document `AI_CRM_Logistics_POC.docx`.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
@@ -19,25 +17,22 @@ Built from the design document `AI_CRM_Logistics_POC.docx`.
 ## </div>
 
 ## 🧩 What is FreightDesk?
-
 Freight brokerage runs on manual phone calls, scattered WhatsApp quotes, and spreadsheets tracking vendor rates. **FreightDesk** automates the entire pipeline: AI-assisted requirement intake, weighted vendor matching, AI-driven quote collection over voice and Tamil WhatsApp, margin-aware pricing, vendor lock-in, trip execution, and billing — with a full audit trail throughout.
-
 ---
 
 ## ✨ Key Features
-
-| Feature                          | Description                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------ |
-| 🧠 **AI Requirement Intake**     | Captures freight requirements and tracks them through pricing and trip lifecycle     |
-| 🎯 **Vendor Matching**           | Scores vendors on route, service type, lane coverage, compliance and commercial fit  |
-| 📋 **Weighted Shortlisting**     | Surfaces the most relevant vendors before outreach begins                            |
-| 🗣️ **Voice & WhatsApp Quoting**  | AI-driven quote ingestion with confidence scoring and anomaly flags, including Tamil |
-| 💰 **Margin-Aware Pricing**      | Sales pricing with customer confirmation before booking                              |
-| ✅ **L1 Rate Validation**        | Vendor acceptance flow feeding automated trip creation                               |
-| 🚚 **End-to-End Trip Execution** | Dispatch → proof of delivery → invoice → receipt → vendor payout                     |
-| 🎭 **Simulation Mode**           | Realistic operational signals so the repo demos without live telephony               |
-| 🧪 **Testable Domain Logic**     | Matching, parsing, aggregation and rate-card checks are unit tested                  |
-
+| Feature | Description |
+|---|---|
+| 🧠 **AI Requirement Intake** | Captures freight requirements and tracks them through pricing and trip lifecycle |
+| 🎯 **Vendor Matching** | Scores vendors on route, service type, lane coverage, compliance and commercial fit |
+| 📋 **Weighted Shortlisting** | Surfaces the most relevant vendors before outreach begins |
+| 🗣️ **Voice & WhatsApp Quoting** | AI-driven quote ingestion with confidence scoring and anomaly flags, including Tamil |
+| 📞 **Sarvam AI Calls** | Sarvam Voice Agents place the price enquiry call and the transcript becomes a quote |
+| 💰 **Margin-Aware Pricing** | Sales pricing with customer confirmation before booking |
+| ✅ **L1 Rate Validation** | Vendor acceptance flow feeding automated trip creation |
+| 🚚 **End-to-End Trip Execution** | Dispatch → proof of delivery → invoice → receipt → vendor payout |
+| 🎭 **Simulation Mode** | Realistic operational signals so the repo demos without live telephony |
+| 🧪 **Testable Domain Logic** | Matching, parsing, aggregation and rate-card checks are unit tested |
 ---
 
 ## 🚀 Quick Start
@@ -118,10 +113,10 @@ Excluded vendors carry their exclusion reasons.
 Each shortlisted vendor gets an attempt on their preferred channel. In **simulation mode** (default), replies arrive on timers; in **live mode**, the message is actually sent and the reply arrives via webhook. Either way, the reply text goes through the same rules parser:
 
 ```text
-"38500 podhum, toll extra"   →  parsed rate + confidence score
-"ithu 41k"                   →  parsed rate + confidence score
+"38500, toll extra"          →  parsed rate + confidence score
+"rate 41k"                   →  parsed rate + confidence score
 "Rs. 39,500"                 →  parsed rate + confidence score
-Tamil numerals               →  parsed rate + confidence score
+"call me later, rate evening" →  no rate, flagged for an agent
 ```
 
 Replies under **0.80 confidence** or more than **30% off** the rate card reference are flagged and need sales-agent verification before reaching L1.
@@ -179,16 +174,31 @@ TWILIO_FROM=...
 ```
 
 Calls are placed through Twilio reading the requirement script. A Twilio-formatted reply (`From`/`Body`) posted to `POST /api/webhooks/inbound` is parsed into a quote.
-
 > The payload builders and inbound parser are unit tested; the calls themselves need real accounts and have not been exercised against live providers from this machine.
 
+**Sarvam AI**
+
+```env
+SARVAM_API_KEY=...
+SARVAM_ORG_ID=...
+SARVAM_WORKSPACE_ID=...
+SARVAM_APP_ID=...
+SARVAM_CONNECTION_ID=...
+SARVAM_AGENT_PHONE_NUMBER=+91...
+```
+
+With these set, the **Sarvam AI price enquiry** panel on a requirement places a real instant outbound call through Sarvam Voice Agents (the Sarvam chat model writes the spoken script, with a deterministic English fallback). The call record appears immediately and the transcript is posted to `POST /api/webhooks/sarvam`, which parses the vendor's spoken rate into a quote like any other channel.
+
+Only one number is ever dialled: `SARVAM_VENDOR_PHONE` (default `6385106931`, David Transportation). That vendor is kept in the vendor master on boot, and the outbound payload builder refuses any other number, so the endpoint cannot be used as a dialler.
+
+> The payload builders, script fallback and webhook parser are unit tested; the call itself needs Sarvam credentials and has not been exercised against the live API from this machine.
 ---
 
 ## 🧪 Tests
 
 ```bash
 npm run typecheck              # server and client
-npm test                       # 45 unit tests: matching, parser, aggregation, rate card, db, auth, channels
+npm test                       # 53 unit tests: matching, parser, aggregation, rate card, db, auth, channels, Sarvam
 python scripts/smoke_test.py   # 68 end-to-end checks against a running server
 ```
 

@@ -9,6 +9,7 @@ import type {
   RateLookupInput,
   RateLookupResult,
   Requirement,
+  SarvamCall,
   Trip,
   TripStatus,
   Vendor,
@@ -18,6 +19,13 @@ import type {
 export interface ExcludedEntry {
   vendor: { id: number; name: string; active: boolean; kycDone: boolean };
   reasons: string[];
+}
+
+export interface SarvamReadiness {
+  configured: boolean;
+  vendorName: string;
+  vendorPhone: string;
+  model: string;
 }
 
 export interface RequirementDetail {
@@ -36,6 +44,8 @@ export interface RequirementDetail {
   invoice: Invoice | null;
   outreachRunning: boolean;
   lockInProgress: boolean;
+  sarvamCalls: SarvamCall[];
+  sarvam: SarvamReadiness;
   started?: number;
 }
 
@@ -165,4 +175,4 @@ export const REQUIREMENT_STATUS_TONE: Record<string, 'info' | 'success' | 'warni
   closed: 'neutral',
 };
 
-export type { DashboardMetrics, Order, Quote, QuoteSummary, RateCardRow, RateLookupInput, RateLookupResult, Requirement, Trip, Vendor, VendorMatch };
+export type { DashboardMetrics, Order, Quote, QuoteSummary, RateCardRow, RateLookupInput, RateLookupResult, Requirement, SarvamCall, Trip, Vendor, VendorMatch };
