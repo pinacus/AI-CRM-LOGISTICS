@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "FreightDesk: AI-driven CRM and logistics automation POC (requirement to payment)",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "workspaces": [
     "server",
     "web"

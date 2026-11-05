@@ -1,10 +1,10 @@
-import type { Quote, Requirement, SarvamCall, SarvamCallStatus } from '../../shared/types';
-import { VEHICLE_TYPE_LABEL } from '../../shared/types';
-import { phoneKey, type FetchLike } from './channels';
-import { config, type SarvamConfig } from './config';
-import { withNormalisation } from './domain/aggregation';
-import { flagReason, parseQuoteReply } from './domain/parsing';
-import { getRequirement, type Store } from './store';
+import type { Quote, Requirement, SarvamCallStatus } from "../../shared/types";
+import { VEHICLE_TYPE_LABEL } from "../../shared/types";
+import { phoneKey, type FetchLike } from "./channels";
+import { config, type SarvamConfig } from "./config";
+import { withNormalisation } from "./domain/aggregation";
+import { flagReason, parseQuoteReply } from "./domain/parsing";
+import { getRequirement, type Store } from "./store";
 
 /**
  * Sarvam AI integration.
@@ -21,32 +21,43 @@ import { getRequirement, type Store } from './store';
  * this integration into a dialler.
  */
 
-const MODEL_BASE_URL = 'https://api.sarvam.ai';
-const OUTBOUND_BASE_URL = 'https://apps.sarvam.ai/api/outbounds';
-const ANALYTICS_BASE_URL = 'https://apps.sarvam.ai/api/analytics';
+const MODEL_BASE_URL = "https://api.sarvam.ai";
+const OUTBOUND_BASE_URL = "https://apps.sarvam.ai/api/outbounds";
+const ANALYTICS_BASE_URL = "https://apps.sarvam.ai/api/analytics";
 
 /** The workspace key that apps.sarvam.ai accepts as X-API-Key. */
-export function sarvamVoiceKey(cfg: SarvamConfig = config.sarvam): string | null {
-  return cfg.voiceApiKey ?? cfg.apiKey ?? null;
+export function sarvamVoiceKey(
+  cfg: SarvamConfig = config.sarvam,
+): string | null {
+  return cfg.voiceApiKey ?? null;
 }
 
 export function sarvamConfigured(cfg: SarvamConfig = config.sarvam): boolean {
   return Boolean(
-    sarvamVoiceKey(cfg) && cfg.orgId && cfg.workspaceId && cfg.appId && cfg.connectionId && cfg.agentPhoneNumber,
+    sarvamVoiceKey(cfg) &&
+    cfg.orgId &&
+    cfg.workspaceId &&
+    cfg.appId &&
+    cfg.connectionId &&
+    cfg.agentPhoneNumber,
   );
 }
 
 /** 10 digit Indian mobile numbers are normalised to E.164 for Sarvam. */
 export function normaliseIndianPhone(phone: string): string {
-  const digits = phone.replace(/[^0-9]/g, '');
+  const digits = phone.replace(/[^0-9]/g, "");
   if (digits.length === 10) return `+91${digits}`;
-  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
-  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+  if (digits.length === 11 && digits.startsWith("0"))
+    return `+91${digits.slice(1)}`;
+  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
   return `+${digits}`;
 }
 
 /** True only for the one vendor number this build is allowed to dial. */
-export function isAllowedSarvamNumber(phone: string, cfg: SarvamConfig = config.sarvam): boolean {
+export function isAllowedSarvamNumber(
+  phone: string,
+  cfg: SarvamConfig = config.sarvam,
+): boolean {
   const key = phoneKey(phone);
   return key.length > 0 && key === phoneKey(cfg.vendorPhone);
 }
@@ -58,9 +69,12 @@ export function sarvamOutboundPayload(
   variables: Record<string, string> = {},
   opening?: string,
 ): { url: string; init: RequestInit } {
-  if (!sarvamConfigured(cfg)) throw new Error('Sarvam AI voice credentials are not configured');
+  if (!sarvamConfigured(cfg))
+    throw new Error("Sarvam AI voice credentials are not configured");
   if (!isAllowedSarvamNumber(to, cfg)) {
-    throw new Error(`Sarvam AI may only call ${cfg.vendorName} on ${cfg.vendorPhone}`);
+    throw new Error(
+      `Sarvam AI may only call ${cfg.vendorName} on ${cfg.vendorPhone}`,
+    );
   }
 
   const body = {
@@ -69,22 +83,29 @@ export function sarvamOutboundPayload(
       app_version: cfg.appVersion,
       connection_config: {
         connection_id: cfg.connectionId,
-        agent_phone_number: normaliseIndianPhone(cfg.agentPhoneNumber ?? ''),
+        agent_phone_number: normaliseIndianPhone(cfg.agentPhoneNumber ?? ""),
       },
-      ...(Object.keys(variables).length > 0 ? { agent_variables: variables } : {}),
+      ...(Object.keys(variables).length > 0
+        ? { agent_variables: variables }
+        : {}),
       ...(opening ? { app_overrides: { initial_bot_message: opening } } : {}),
     },
     user_config: { user_phone_number: normaliseIndianPhone(to) },
-    ...(cfg.webhookUrl ? { webhook_config: { url: cfg.webhookUrl, metadata } } : {}),
+    ...(cfg.webhookUrl
+      ? { webhook_config: { url: cfg.webhookUrl, metadata } }
+      : {}),
   };
 
   return {
-    url: `${OUTBOUND_BASE_URL}/v1/orgs/${encodeURIComponent(cfg.orgId ?? '')}/workspaces/${encodeURIComponent(
-      cfg.workspaceId ?? '',
+    url: `${OUTBOUND_BASE_URL}/v1/orgs/${encodeURIComponent(cfg.orgId ?? "")}/workspaces/${encodeURIComponent(
+      cfg.workspaceId ?? "",
     )}/outbounds`,
     init: {
-      method: 'POST',
-      headers: { 'X-API-Key': sarvamVoiceKey(cfg) ?? '', 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: {
+        "X-API-Key": sarvamVoiceKey(cfg) ?? "",
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     },
   };
@@ -92,7 +113,7 @@ export function sarvamOutboundPayload(
 
 export interface SarvamCallPlacement {
   ok: boolean;
-  provider: 'sarvam';
+  provider: "sarvam";
   detail: string;
   attemptId: string | null;
 }
@@ -106,17 +127,23 @@ export async function placeSarvamCall(
   opening?: string,
 ): Promise<SarvamCallPlacement> {
   try {
-    const { url, init } = sarvamOutboundPayload(to, cfg, metadata, variables, opening);
+    const { url, init } = sarvamOutboundPayload(
+      to,
+      cfg,
+      metadata,
+      variables,
+      opening,
+    );
     const res = await fetchImpl(url, init);
     const body = await res.text();
     if (!res.ok) {
       const hint =
         res.status === 401 || res.status === 403
-          ? ' The workspace key is rejected: SARVAM_VOICE_API_KEY must be the workspace API key from the Sarvam Voice Agents dashboard, not the model API key.'
-          : '';
+          ? " The workspace key is rejected: SARVAM_VOICE_API_KEY must be the workspace API key from the Sarvam Voice Agents dashboard, not the model API key."
+          : "";
       return {
         ok: false,
-        provider: 'sarvam',
+        provider: "sarvam",
         detail: `Sarvam ${res.status}: ${body.slice(0, 200)}${hint}`,
         attemptId: null,
       };
@@ -124,16 +151,21 @@ export async function placeSarvamCall(
     let attemptId: string | null = null;
     try {
       const json = JSON.parse(body) as { attempt_id?: unknown };
-      if (typeof json.attempt_id === 'string') attemptId = json.attempt_id;
+      if (typeof json.attempt_id === "string") attemptId = json.attempt_id;
     } catch {
       // the provider answered with something other than JSON; the webhook still resolves the call
     }
-    return { ok: true, provider: 'sarvam', detail: 'call queued with Sarvam Voice Agents', attemptId };
+    return {
+      ok: true,
+      provider: "sarvam",
+      detail: "call queued with Sarvam Voice Agents",
+      attemptId,
+    };
   } catch (err) {
     return {
       ok: false,
-      provider: 'sarvam',
-      detail: err instanceof Error ? err.message : 'call failed',
+      provider: "sarvam",
+      detail: err instanceof Error ? err.message : "call failed",
       attemptId: null,
     };
   }
@@ -153,7 +185,7 @@ export function sarvamAgentVariables(req: Requirement): Record<string, string> {
     axle: req.axle,
     loading_date: req.loadingDate,
     loading_time: req.loadingTime,
-    question: 'What is your best all-inclusive rate in rupees for this trip?',
+    question: "What is your best all-inclusive rate in rupees for this trip?",
   };
 }
 
@@ -171,7 +203,7 @@ export function enquiryScript(req: Requirement, vendorName: string): string {
 
 export interface GeneratedScript {
   script: string;
-  source: 'sarvam' | 'template';
+  source: "sarvam" | "template";
   detail?: string;
 }
 
@@ -186,7 +218,12 @@ export async function generateEnquiryScript(
   fetchImpl: FetchLike = fetch,
 ): Promise<GeneratedScript> {
   const fallback = enquiryScript(req, vendorName);
-  if (!cfg.apiKey) return { script: fallback, source: 'template', detail: 'Sarvam API key is not configured' };
+  if (!cfg.apiKey)
+    return {
+      script: fallback,
+      source: "template",
+      detail: "Sarvam API key is not configured",
+    };
 
   const prompt =
     `Write a spoken telephone script, at most 90 words, for an outbound price enquiry call from a freight ` +
@@ -197,37 +234,54 @@ export async function generateEnquiryScript(
     `loading date. End by asking them to repeat the rate once for confirmation. English only, one short paragraph.`;
 
   try {
-    const res = await fetchImpl(`${(cfg.modelBaseUrl || MODEL_BASE_URL).replace(/\/+$/, '')}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'api-subscription-key': cfg.apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: cfg.model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You write concise, polite telephone scripts for an Indian freight brokerage. Reply with the script text only, in English.',
-          },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 260,
-        reasoning_effort: null,
-      }),
-    });
+    const res = await fetchImpl(
+      `${(cfg.modelBaseUrl || MODEL_BASE_URL).replace(/\/+$/, "")}/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "api-subscription-key": cfg.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: cfg.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You write concise, polite telephone scripts for an Indian freight brokerage. Reply with the script text only, in English.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 260,
+          reasoning_effort: null,
+        }),
+      },
+    );
     const body = await res.text();
     if (!res.ok) {
-      return { script: fallback, source: 'template', detail: `Sarvam ${res.status}: ${body.slice(0, 160)}` };
+      return {
+        script: fallback,
+        source: "template",
+        detail: `Sarvam ${res.status}: ${body.slice(0, 160)}`,
+      };
     }
-    const json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
+    const json = JSON.parse(body) as {
+      choices?: { message?: { content?: string } }[];
+    };
     const text = json.choices?.[0]?.message?.content?.trim();
-    if (!text) return { script: fallback, source: 'template', detail: 'Sarvam returned an empty script' };
-    return { script: text.slice(0, 1500), source: 'sarvam' };
+    if (!text)
+      return {
+        script: fallback,
+        source: "template",
+        detail: "Sarvam returned an empty script",
+      };
+    return { script: text.slice(0, 1500), source: "sarvam" };
   } catch (err) {
     return {
       script: fallback,
-      source: 'template',
-      detail: err instanceof Error ? err.message : 'Sarvam model call failed',
+      source: "template",
+      detail: err instanceof Error ? err.message : "Sarvam model call failed",
     };
   }
 }
@@ -245,44 +299,59 @@ export interface SarvamWebhookEvent {
   userText: string | null;
 }
 
-const STATUSES: SarvamCallStatus[] = ['queued', 'connected', 'no_answer', 'busy', 'failed'];
+const STATUSES: SarvamCallStatus[] = [
+  "queued",
+  "connected",
+  "no_answer",
+  "busy",
+  "failed",
+];
 
 /** Reads the call result Sarvam posts after an outbound attempt finishes. */
 export function parseSarvamWebhook(body: unknown): SarvamWebhookEvent | null {
-  if (!body || typeof body !== 'object') return null;
+  if (!body || typeof body !== "object") return null;
   const obj = body as Record<string, unknown>;
-  const rawStatus = String(obj.status ?? '');
+  const rawStatus = String(obj.status ?? "");
   if (!STATUSES.includes(rawStatus as SarvamCallStatus)) return null;
 
   const webhook =
-    obj.webhook_config && typeof obj.webhook_config === 'object'
+    obj.webhook_config && typeof obj.webhook_config === "object"
       ? (obj.webhook_config as Record<string, unknown>)
       : {};
   const metadata =
-    webhook.metadata && typeof webhook.metadata === 'object' ? (webhook.metadata as Record<string, unknown>) : {};
+    webhook.metadata && typeof webhook.metadata === "object"
+      ? (webhook.metadata as Record<string, unknown>)
+      : {};
 
-  const turns = Array.isArray(obj.interaction_transcript) ? obj.interaction_transcript : [];
+  const turns = Array.isArray(obj.interaction_transcript)
+    ? obj.interaction_transcript
+    : [];
   const lines: string[] = [];
   const userLines: string[] = [];
   for (const turn of turns) {
-    if (!turn || typeof turn !== 'object') continue;
+    if (!turn || typeof turn !== "object") continue;
     const t = turn as Record<string, unknown>;
-    const role = String(t.role ?? '');
-    const text = typeof t.en_text === 'string' ? t.en_text.trim() : '';
+    const role = String(t.role ?? "");
+    const text = typeof t.en_text === "string" ? t.en_text.trim() : "";
     if (!text) continue;
-    lines.push(`${role === 'user' ? 'Vendor' : 'Agent'}: ${text}`);
-    if (role === 'user') userLines.push(text);
+    lines.push(`${role === "user" ? "Vendor" : "Agent"}: ${text}`);
+    if (role === "user") userLines.push(text);
   }
 
   return {
-    attemptId: typeof obj.attempt_id === 'string' ? obj.attempt_id : null,
+    attemptId: typeof obj.attempt_id === "string" ? obj.attempt_id : null,
     status: rawStatus as SarvamCallStatus,
-    durationSec: typeof obj.duration === 'number' ? obj.duration : null,
-    interactionId: typeof obj.interaction_id === 'string' ? obj.interaction_id : null,
-    failureReason: typeof obj.failure_reason === 'string' ? obj.failure_reason : null,
-    requirementId: typeof metadata.requirementId === 'string' ? metadata.requirementId : null,
-    transcript: lines.length > 0 ? lines.join('\n') : null,
-    userText: userLines.length > 0 ? userLines.join(' ') : null,
+    durationSec: typeof obj.duration === "number" ? obj.duration : null,
+    interactionId:
+      typeof obj.interaction_id === "string" ? obj.interaction_id : null,
+    failureReason:
+      typeof obj.failure_reason === "string" ? obj.failure_reason : null,
+    requirementId:
+      typeof metadata.requirementId === "string"
+        ? metadata.requirementId
+        : null,
+    transcript: lines.length > 0 ? lines.join("\n") : null,
+    userText: userLines.length > 0 ? userLines.join(" ") : null,
   };
 }
 
@@ -298,39 +367,69 @@ export interface SarvamOutcome {
  * spoken answer into a quote, subject to the usual confidence and rate-card
  * checks.
  */
-export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): SarvamOutcome {
+export function applySarvamCallResult(
+  store: Store,
+  event: SarvamWebhookEvent,
+): SarvamOutcome {
   const call =
-    (event.attemptId ? store.calls.find((c) => c.attemptId === event.attemptId) : undefined) ??
+    (event.attemptId
+      ? store.calls.find((c) => c.attemptId === event.attemptId)
+      : undefined) ??
     store.calls
       .slice()
       .reverse()
-      .find((c) => c.status === 'queued' && (!event.requirementId || c.requirementId === event.requirementId));
+      .find(
+        (c) =>
+          c.status === "queued" &&
+          (!event.requirementId || c.requirementId === event.requirementId),
+      );
 
-  if (!call) return { ok: false, detail: 'No Sarvam call matches this webhook' };
+  if (!call)
+    return { ok: false, detail: "No Sarvam call matches this webhook" };
 
   call.status = event.status;
   call.durationSec = event.durationSec;
   call.interactionId = event.interactionId;
   call.failureReason = event.failureReason;
   call.transcript = event.transcript;
-  call.completedAt = event.status === 'queued' ? null : new Date().toISOString();
+  call.completedAt =
+    event.status === "queued" ? null : new Date().toISOString();
 
-  if (event.status !== 'connected' || !event.userText) {
-    return { ok: true, detail: `call ${call.id} is ${event.status}`, callId: call.id };
+  if (event.status !== "connected" || !event.userText) {
+    return {
+      ok: true,
+      detail: `call ${call.id} is ${event.status}`,
+      callId: call.id,
+    };
   }
 
   const requirement = getRequirement(store, call.requirementId);
-  if (!requirement) return { ok: true, detail: `call ${call.id} has no requirement`, callId: call.id };
+  if (!requirement)
+    return {
+      ok: true,
+      detail: `call ${call.id} has no requirement`,
+      callId: call.id,
+    };
   if (call.quoteId) {
     // A re-delivered transcript repairs a quote whose rate could not be read the
     // first time (for example a spoken reply that needed the number-word parser).
     const existing = store.quotes.find((q) => q.id === call.quoteId);
     if (!existing || existing.rate !== null) {
-      return { ok: true, detail: `call ${call.id} already produced ${call.quoteId}`, callId: call.id, quoteId: call.quoteId };
+      return {
+        ok: true,
+        detail: `call ${call.id} already produced ${call.quoteId}`,
+        callId: call.id,
+        quoteId: call.quoteId,
+      };
     }
     const again = parseQuoteReply(event.userText, requirement.rateCardRate);
     if (again.rate === null) {
-      return { ok: true, detail: `call ${call.id} already produced ${call.quoteId}`, callId: call.id, quoteId: call.quoteId };
+      return {
+        ok: true,
+        detail: `call ${call.id} already produced ${call.quoteId}`,
+        callId: call.id,
+        quoteId: call.quoteId,
+      };
     }
     const repaired = withNormalisation({
       ...existing,
@@ -341,9 +440,18 @@ export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): 
       confidence: again.confidence,
       rawText: event.userText,
     });
-    repaired.flagReason = flagReason(repaired.rate, repaired.confidence, requirement.rateCardRate);
+    repaired.flagReason = flagReason(
+      repaired.rate,
+      repaired.confidence,
+      requirement.rateCardRate,
+    );
     Object.assign(existing, repaired);
-    return { ok: true, detail: `re-parsed ${existing.id} from ${call.vendorName}`, callId: call.id, quoteId: existing.id };
+    return {
+      ok: true,
+      detail: `re-parsed ${existing.id} from ${call.vendorName}`,
+      callId: call.id,
+      quoteId: existing.id,
+    };
   }
 
   const parsed = parseQuoteReply(event.userText, requirement.rateCardRate);
@@ -357,7 +465,7 @@ export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): 
     tollIncluded: parsed.tollIncluded,
     availableOnDate: parsed.availableOnDate,
     conditions: parsed.conditions,
-    channel: 'voice',
+    channel: "voice",
     rawText: event.userText,
     confidence: parsed.confidence,
     receivedAt: new Date().toISOString(),
@@ -366,32 +474,51 @@ export function applySarvamCallResult(store: Store, event: SarvamWebhookEvent): 
     tollAllowance: 0,
     normalisedRate: 0,
   });
-  quote.flagReason = flagReason(quote.rate, quote.confidence, requirement.rateCardRate);
+  quote.flagReason = flagReason(
+    quote.rate,
+    quote.confidence,
+    requirement.rateCardRate,
+  );
   store.quotes.push(quote);
   call.quoteId = quote.id;
 
-  const attempt = store.attempts.find((a) => a.requirementId === requirement.id && a.vendorId === call.vendorId);
+  const attempt = store.attempts.find(
+    (a) => a.requirementId === requirement.id && a.vendorId === call.vendorId,
+  );
   if (attempt) {
-    attempt.status = 'replied';
+    attempt.status = "replied";
     attempt.reply = event.userText;
     attempt.repliedAt = new Date().toISOString();
   }
 
-  if (requirement.status === 'intake' || requirement.status === 'shortlisted' || requirement.status === 'outreach') {
-    requirement.status = 'quoted';
+  if (
+    requirement.status === "intake" ||
+    requirement.status === "shortlisted" ||
+    requirement.status === "outreach"
+  ) {
+    requirement.status = "quoted";
   }
-  return { ok: true, detail: `parsed ${quote.id} from ${call.vendorName}`, callId: call.id, quoteId: quote.id };
+  return {
+    ok: true,
+    detail: `parsed ${quote.id} from ${call.vendorName}`,
+    callId: call.id,
+    quoteId: quote.id,
+  };
 }
 
 /* -------------------------------------------------------------- pull result */
 
 /** ISO 8601 stamp with an explicit IST offset, which the analytics API requires. */
 function istStamp(ms: number): string {
-  const shifted = new Date(ms + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  const shifted = new Date(ms + 5.5 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 19);
   return `${shifted}+05:30`;
 }
 
-function analyticsScope(cfg: SarvamConfig): { base: string; key: string } | null {
+function analyticsScope(
+  cfg: SarvamConfig,
+): { base: string; key: string } | null {
   const key = sarvamVoiceKey(cfg);
   if (!key || !cfg.orgId || !cfg.workspaceId || !cfg.appId) return null;
   return {
@@ -418,7 +545,7 @@ async function analyticsGet(
   key: string,
   fetchImpl: FetchLike,
 ): Promise<Record<string, unknown> | null> {
-  const res = await fetchImpl(url, { headers: { 'X-API-Key': key } });
+  const res = await fetchImpl(url, { headers: { "X-API-Key": key } });
   if (!res.ok) return null;
   const text = await res.text();
   try {
@@ -438,7 +565,13 @@ export async function fetchSarvamAttemptResult(
   attemptId: string,
   cfg: SarvamConfig = config.sarvam,
   fetchImpl: FetchLike = fetch,
-): Promise<{ status: SarvamCallStatus; durationSec: number | null; interactionId: string | null; failureReason: string | null; turns: { role: string; en_text: string }[] } | null> {
+): Promise<{
+  status: SarvamCallStatus;
+  durationSec: number | null;
+  interactionId: string | null;
+  failureReason: string | null;
+  turns: { role: string; en_text: string }[];
+} | null> {
   const scope = analyticsScope(cfg);
   if (!scope || !attemptId) return null;
 
@@ -446,35 +579,64 @@ export async function fetchSarvamAttemptResult(
   const params = new URLSearchParams({
     start_datetime: istStamp(now - 3 * 24 * 60 * 60 * 1000),
     end_datetime: istStamp(now + 24 * 60 * 60 * 1000),
-    limit: '50',
-    filter_conditions: JSON.stringify([{ field: 'attempt_id', operator: 'equals', value: attemptId }]),
+    limit: "50",
+    filter_conditions: JSON.stringify([
+      { field: "attempt_id", operator: "equals", value: attemptId },
+    ]),
   });
-  const attempts = await analyticsGet(`${scope.base}/attempts?${params.toString()}`, scope.key, fetchImpl);
-  const items = Array.isArray(attempts?.items) ? (attempts?.items as AnalyticsAttempt[]) : [];
+  const attempts = await analyticsGet(
+    `${scope.base}/attempts?${params.toString()}`,
+    scope.key,
+    fetchImpl,
+  );
+  const items = Array.isArray(attempts?.items)
+    ? (attempts?.items as AnalyticsAttempt[])
+    : [];
   const attempt = items.find((item) => item.attempt_id === attemptId);
   if (!attempt) return null;
 
-  const rawStatus = String(attempt.connectivity_status ?? '');
-  const status: SarvamCallStatus = STATUSES.includes(rawStatus as SarvamCallStatus)
+  const rawStatus = String(attempt.connectivity_status ?? "");
+  const status: SarvamCallStatus = STATUSES.includes(
+    rawStatus as SarvamCallStatus,
+  )
     ? (rawStatus as SarvamCallStatus)
-    : 'queued';
-  const interactionId = typeof attempt.interaction_id === 'string' ? attempt.interaction_id : null;
-  const failure = typeof attempt.failure_reason === 'string' && attempt.failure_reason !== 'NO_FAILURE_REASON' ? attempt.failure_reason : null;
-  const durationSec = typeof attempt.duration_in_seconds === 'number' ? attempt.duration_in_seconds : null;
+    : "queued";
+  const interactionId =
+    typeof attempt.interaction_id === "string" ? attempt.interaction_id : null;
+  const failure =
+    typeof attempt.failure_reason === "string" &&
+    attempt.failure_reason !== "NO_FAILURE_REASON"
+      ? attempt.failure_reason
+      : null;
+  const durationSec =
+    typeof attempt.duration_in_seconds === "number"
+      ? attempt.duration_in_seconds
+      : null;
 
   let turns: { role: string; en_text: string }[] = [];
-  if (status === 'connected' && interactionId) {
+  if (status === "connected" && interactionId) {
     const iParams = new URLSearchParams({
       start_datetime: istStamp(now - 3 * 24 * 60 * 60 * 1000),
       end_datetime: istStamp(now + 24 * 60 * 60 * 1000),
-      include_transcript: 'true',
-      limit: '20',
+      include_transcript: "true",
+      limit: "20",
     });
-    const list = await analyticsGet(`${scope.base}/interactions?${iParams.toString()}`, scope.key, fetchImpl);
-    const rows = Array.isArray(list?.items) ? (list?.items as AnalyticsInteraction[]) : [];
-    const interaction = rows.find((row) => row.interaction_id === interactionId);
+    const list = await analyticsGet(
+      `${scope.base}/interactions?${iParams.toString()}`,
+      scope.key,
+      fetchImpl,
+    );
+    const rows = Array.isArray(list?.items)
+      ? (list?.items as AnalyticsInteraction[])
+      : [];
+    const interaction = rows.find(
+      (row) => row.interaction_id === interactionId,
+    );
     turns = (interaction?.translate_transcript ?? [])
-      .map((turn) => ({ role: String(turn.role ?? ''), en_text: String(turn.text ?? '').trim() }))
+      .map((turn) => ({
+        role: String(turn.role ?? ""),
+        en_text: String(turn.text ?? "").trim(),
+      }))
       .filter((turn) => turn.en_text.length > 0);
   }
 
@@ -490,12 +652,26 @@ export async function syncSarvamCall(
 ): Promise<SarvamOutcome> {
   const call = store.calls.find((c) => c.id === callId);
   if (!call) return { ok: false, detail: `Call ${callId} not found` };
-  if (!call.attemptId) return { ok: false, detail: `Call ${callId} was never accepted by Sarvam`, callId: call.id };
+  if (!call.attemptId)
+    return {
+      ok: false,
+      detail: `Call ${callId} was never accepted by Sarvam`,
+      callId: call.id,
+    };
 
   const result = await fetchSarvamAttemptResult(call.attemptId, cfg, fetchImpl);
-  if (!result) return { ok: true, detail: `Sarvam has no result for ${call.attemptId} yet`, callId: call.id };
-  if (result.status === 'queued') {
-    return { ok: true, detail: `Sarvam is still working on ${call.attemptId}`, callId: call.id };
+  if (!result)
+    return {
+      ok: true,
+      detail: `Sarvam has no result for ${call.attemptId} yet`,
+      callId: call.id,
+    };
+  if (result.status === "queued") {
+    return {
+      ok: true,
+      detail: `Sarvam is still working on ${call.attemptId}`,
+      callId: call.id,
+    };
   }
 
   const event = parseSarvamWebhook({
@@ -506,7 +682,12 @@ export async function syncSarvamCall(
     failure_reason: result.failureReason,
     interaction_transcript: result.turns,
   });
-  if (!event) return { ok: false, detail: 'Sarvam returned an unreadable result', callId: call.id };
+  if (!event)
+    return {
+      ok: false,
+      detail: "Sarvam returned an unreadable result",
+      callId: call.id,
+    };
   return applySarvamCallResult(store, event);
 }
 
