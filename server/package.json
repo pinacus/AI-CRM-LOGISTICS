@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/src/index.js",
+    "start": "node dist/server/src/index.js",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/domain/matching.test.ts src/domain/parsing.test.ts src/domain/aggregation.test.ts src/domain/ratecard.test.ts src/db.test.ts src/auth.test.ts src/channels.test.ts src/sarvam.test.ts"
