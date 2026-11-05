@@ -3,6 +3,7 @@
  🚛 FreightDesk
 
 ### Requirement to payment, automated end to end.
+
 An MVP for AI-driven CRM and logistics automation in freight brokerage — vendor matching, AI voice and Tamil WhatsApp quoting, L1 rate suggestion, vendor lock-in, trip tracking, billing and payment, all in one system.
 Built from the design document `AI_CRM_Logistics_POC.docx`.
 
@@ -17,22 +18,24 @@ Built from the design document `AI_CRM_Logistics_POC.docx`.
 ## </div>
 
 ## 🧩 What is FreightDesk?
-Freight brokerage runs on manual phone calls, scattered WhatsApp quotes, and spreadsheets tracking vendor rates. **FreightDesk** automates the entire pipeline: AI-assisted requirement intake, weighted vendor matching, AI-driven quote collection over voice and Tamil WhatsApp, margin-aware pricing, vendor lock-in, trip execution, and billing — with a full audit trail throughout.
----
+
+## Freight brokerage runs on manual phone calls, scattered WhatsApp quotes, and spreadsheets tracking vendor rates. **FreightDesk** automates the entire pipeline: AI-assisted requirement intake, weighted vendor matching, AI-driven quote collection over voice and Tamil WhatsApp, margin-aware pricing, vendor lock-in, trip execution, and billing — with a full audit trail throughout.
 
 ## ✨ Key Features
-| Feature | Description |
-|---|---|
-| 🧠 **AI Requirement Intake** | Captures freight requirements and tracks them through pricing and trip lifecycle |
-| 🎯 **Vendor Matching** | Scores vendors on route, service type, lane coverage, compliance and commercial fit |
-| 📋 **Weighted Shortlisting** | Surfaces the most relevant vendors before outreach begins |
-| 🗣️ **Voice & WhatsApp Quoting** | AI-driven quote ingestion with confidence scoring and anomaly flags, including Tamil |
-| 📞 **Sarvam AI Calls** | Sarvam Voice Agents place the enquiry call and the transcript becomes a quote |
-| 💰 **Margin-Aware Pricing** | Sales pricing with customer confirmation before booking |
-| ✅ **L1 Rate Validation** | Vendor acceptance flow feeding automated trip creation |
-| 🚚 **End-to-End Trip Execution** | Dispatch → proof of delivery → invoice → receipt → vendor payout |
-| 🎭 **Simulation Mode** | Realistic operational signals so the repo demos without live telephony |
-| 🧪 **Testable Domain Logic** | Matching, parsing, aggregation and rate-card checks are unit tested |
+
+| Feature                          | Description                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| 🧠 **AI Requirement Intake**     | Captures freight requirements and tracks them through pricing and trip lifecycle     |
+| 🎯 **Vendor Matching**           | Scores vendors on route, service type, lane coverage, compliance and commercial fit  |
+| 📋 **Weighted Shortlisting**     | Surfaces the most relevant vendors before outreach begins                            |
+| 🗣️ **Voice & WhatsApp Quoting**  | AI-driven quote ingestion with confidence scoring and anomaly flags, including Tamil |
+| 📞 **Sarvam AI Calls**           | Sarvam Voice Agents place the enquiry call and the transcript becomes a quote        |
+| 💰 **Margin-Aware Pricing**      | Sales pricing with customer confirmation before booking                              |
+| ✅ **L1 Rate Validation**        | Vendor acceptance flow feeding automated trip creation                               |
+| 🚚 **End-to-End Trip Execution** | Dispatch → proof of delivery → invoice → receipt → vendor payout                     |
+| 🎭 **Simulation Mode**           | Realistic operational signals so the repo demos without live telephony               |
+| 🧪 **Testable Domain Logic**     | Matching, parsing, aggregation and rate-card checks are unit tested                  |
+
 ---
 
 ## 🚀 Quick Start
@@ -186,6 +189,7 @@ TWILIO_FROM=...
 ```
 
 Calls are placed through Twilio reading the requirement script. A Twilio-formatted reply (`From`/`Body`) posted to `POST /api/webhooks/inbound` is parsed into a quote.
+
 > The payload builders and inbound parser are unit tested; the calls themselves need real accounts and have not been exercised against live providers from this machine.
 
 **Sarvam AI**
@@ -207,6 +211,7 @@ Only one number is ever dialled: `SARVAM_VENDOR_PHONE` (default `6385106931`, Da
 `SARVAM_API_KEY` and `SARVAM_VOICE_API_KEY` are different credentials: the first is the model API subscription key, the second is the workspace key that `apps.sarvam.ai` accepts as `X-API-Key`. A missing or wrong workspace key fails the call with a 401 and a message saying so.
 
 > The payload builders, script fallback and webhook parser are unit tested; the call itself needs Sarvam credentials and has not been exercised against the live API from this machine.
+
 ---
 
 ## 🧪 Tests
@@ -273,3 +278,5 @@ If you found this project interesting:
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:2563eb,50:172554,100:020617&height=120&section=footer" width="100%"/>
 </div>
+
+push from asus tuf

@@ -192,6 +192,7 @@ export function createApiRouter(ctx: ServerContext): Router {
       service: "freightdesk-api",
       vendors: store.vendors.length,
       rateCardRows: store.rateCard.length,
+      sarvam: sarvamStatus(),
     });
   });
 
