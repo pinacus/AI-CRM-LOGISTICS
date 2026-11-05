@@ -273,5 +273,3 @@ If you found this project interesting:
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:2563eb,50:172554,100:020617&height=120&section=footer" width="100%"/>
 </div>
-
-push from asus tuf
